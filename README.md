@@ -12,7 +12,7 @@ realtime-safe processing, and a bold, playful look with a bit of animal personal
 
 **Use plugins in Ableton (or any VST3 host):**
 
-1. `git clone https://github.com/SammyEl-Sherif/ableton.git && cd ableton`
+1. `git clone https://github.com/SammyEl-Sherif/animal-audio-plugins.git && cd animal-audio-plugins`
 2. Run **`/setup`** in Cursor or Claude Code, or by hand:
    `python3 scripts/install_plugins.py --build --clean` (`--prereqs` first; `--dry-run` to preview).
 3. In **Ableton Live → Preferences → Plug-ins**, enable **Use VST3 Plug-In System Folders** and **Rescan**

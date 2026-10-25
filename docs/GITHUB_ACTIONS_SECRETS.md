@@ -1,9 +1,9 @@
-# GitHub Actions secrets (SammyEl-Sherif/ableton)
+# GitHub Actions secrets (SammyEl-Sherif/animal-audio-plugins)
 
 Create or update these under **Settings → Secrets and variables → Actions → Repository secrets**, or from your machine:
 
 ```bash
-gh secret set SECRET_NAME -R SammyEl-Sherif/ableton
+gh secret set SECRET_NAME -R SammyEl-Sherif/animal-audio-plugins
 ```
 
 (Paste the real value when prompted; nothing secret belongs in git.)

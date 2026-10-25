@@ -71,7 +71,7 @@ Downloads work as soon as the row exists, but the site and the Animal Software C
 the **animal-audio-web** catalog. Open a PR there (read its `AGENTS.md` first; Next.js conventions differ):
 
 1. `packages/catalog/src/plugins.ts`: add an `installablePlugins` entry.
-   - `slug`: exactly the ableton slug (`plugins/<slug>`), which is also `plugin_releases.plugin_slug`.
+   - `slug`: exactly the plugin folder slug (`plugins/<slug>`), which is also `plugin_releases.plugin_slug`.
    - `bundleName`: exactly `<PRODUCT_NAME>.vst3` from the preflight output (e.g. `HoneyBadger.vst3`, no spaces).
      The Software Center finds installed copies by this name.
    - `code`: next `AA-00N`; `name`: display name in caps (`HONEY BADGER`); `category`, `blurb`, `longDescription`,
