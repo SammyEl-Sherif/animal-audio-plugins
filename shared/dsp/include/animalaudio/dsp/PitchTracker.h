@@ -32,6 +32,7 @@ public:
     static constexpr float kVoicedOn = 0.25f;
     static constexpr float kVoicedOff = 0.35f;
     static constexpr float kGateRms = 0.002f;
+    static constexpr float kHarmonicCheckFloor = 0.03f; // first dips shallower than this are trusted
 
     void prepare(double sampleRate, float minHz = 75.0f, float maxHz = 1000.0f)
     {
@@ -197,6 +198,10 @@ private:
                 if (normalised[static_cast<std::size_t>(tau)] < normalised[static_cast<std::size_t>(best)])
                     best = tau;
         }
+        else
+        {
+            best = periodBehindHarmonic(best);
+        }
 
         const float aperiodicity = normalised[static_cast<std::size_t>(best)];
         const float coarseLag =
@@ -229,6 +234,42 @@ private:
         current.period = period;
         current.aperiodicity = aperiodicity;
         current.voiced = voiced;
+    }
+
+    /** Depth of the dip at `tau`: the minimum of the parabola through its neighbours, so a period that falls
+        between two lags is not judged shallower than one that lands on a lag. */
+    float dipDepth(int tau) const noexcept
+    {
+        const float left = normalised[static_cast<std::size_t>(tau - 1)];
+        const float mid = normalised[static_cast<std::size_t>(tau)];
+        const float right = normalised[static_cast<std::size_t>(tau + 1)];
+        const float curvature = left - 2.0f * mid + right;
+        if (curvature <= 1.0e-12f)
+            return mid;
+        return std::max(0.0f, mid - 0.125f * (left - right) * (left - right) / curvature);
+    }
+
+    /**
+     * The first dip under the threshold can be a harmonic's period when the true period's dip is shallower than
+     * usual: a fast glide smears it, and a harmonic sitting on a formant dominates the waveform. A multiple of
+     * the true period is never much deeper than the period itself, so a multiple of `lag` whose dip is less than
+     * half as deep is the period (the smallest such multiple, so a true octave jump is never undone).
+     */
+    int periodBehindHarmonic(int lag) const noexcept
+    {
+        const float depth = dipDepth(lag);
+        if (depth < kHarmonicCheckFloor)
+            return lag;
+        for (int k = 2; k * lag + k < maxLag; ++k)
+        {
+            int deepest = k * lag;
+            for (int tau = std::max(minLag, k * lag - k); tau <= k * lag + k; ++tau)
+                if (normalised[static_cast<std::size_t>(tau)] < normalised[static_cast<std::size_t>(deepest)])
+                    deepest = tau;
+            if (dipDepth(deepest) < 0.5f * depth)
+                return deepest;
+        }
+        return lag;
     }
 
     /** Full-rate difference function over +-decimation lags around `guess`, on a window centred at `centre`. */
