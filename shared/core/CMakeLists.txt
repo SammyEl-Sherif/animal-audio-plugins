@@ -16,7 +16,7 @@ target_link_libraries(animalaudio_core INTERFACE
 target_compile_features(animalaudio_core INTERFACE cxx_std_17)
 
 if(AA_BUILD_TESTS)
-    add_executable(animalaudio_core_tests tests/CurveStateTests.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/CurveState.cpp)
+    add_executable(animalaudio_core_tests tests/CurveStateTests.cpp tests/TextFormatTests.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/CurveState.cpp)
     target_link_libraries(animalaudio_core_tests PRIVATE
         animalaudio::dsp
         juce::juce_data_structures

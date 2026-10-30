@@ -12,7 +12,9 @@ namespace animalaudio::core
 inline juce::String formatSemitones(float value)
 {
     const bool whole = std::abs(value - std::round(value)) < 0.005f;
-    const juce::String number = juce::String(std::abs(value), whole ? 0 : 2);
+    // juce::String(double, 0) prints every digit ("2.498E-16"), so whole values go through an int.
+    const juce::String number =
+        whole ? juce::String(juce::roundToInt(std::abs(value))) : juce::String(std::abs(value), 2);
     return (value > 0.0005f ? "+" : value < -0.0005f ? "-" : "") + number + " st";
 }
 
