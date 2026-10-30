@@ -24,10 +24,11 @@ class ReleaseWorkflowPluginChoicesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             workflow = Path(tmp) / "release-plugin.yml"
             workflow.write_text(WORKFLOW.read_text(encoding="utf-8"), encoding="utf-8")
-            self.assertTrue(new_plugin.add_release_workflow_plugin(workflow, "parrot"))
+            slug = "zzzz"
+            self.assertTrue(new_plugin.add_release_workflow_plugin(workflow, slug))
             slugs = new_plugin.plugin_slugs_in_release_workflow(workflow.read_text(encoding="utf-8"))
-            self.assertEqual(slugs, sorted([*plugin_release.list_plugin_slugs(), "parrot"]))
-            self.assertFalse(new_plugin.add_release_workflow_plugin(workflow, "parrot"))
+            self.assertEqual(slugs, sorted([*plugin_release.list_plugin_slugs(), slug]))
+            self.assertFalse(new_plugin.add_release_workflow_plugin(workflow, slug))
             self.assertIn("          - mac\n", workflow.read_text(encoding="utf-8"))
 
     def test_missing_workflow_is_skipped(self) -> None:
