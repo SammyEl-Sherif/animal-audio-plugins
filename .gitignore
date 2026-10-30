@@ -22,7 +22,8 @@ Thumbs.db
 CMakeCache.txt
 CMakeFiles/
 compile_commands.json
-Testing/
+# Anchored: on case-insensitive file systems a bare "Testing/" also hides shared/testing/.
+/Testing/
 
 # Python
 __pycache__/
