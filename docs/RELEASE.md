@@ -54,7 +54,9 @@ Agents: the **`/release <slug>`** skill (`.cursor/skills/release/SKILL.md`) runs
 
 1. The plugin is merged to `main` with `plugins/<slug>/VERSION`, green CI and pluginval (`scripts/verify_plugin.sh <Name>`).
    Set the public version in that file first if needed (own small PR).
-2. GitHub Actions → **Release plugin** → slug `<slug>`, platform `mac`, then again with `win`
+2. Automatic: once **Build** is green on `main`, **Auto release** (`auto-release.yml`) runs **Release plugin** for
+   `mac` and `win` for every plugin whose `<slug>-vX.Y.Z` tag does not exist yet. Manual run (re-run a failed
+   platform, or upload-free dry run): GitHub Actions → **Release plugin** → slug `<slug>`, platform `mac` / `win`
    (`gh workflow run release-plugin.yml -f plugin=<slug> -f platform=mac`). Each run builds, tests, signs, notarizes
    (mac), validates, uploads to Supabase Storage, publishes the active `plugin_releases` row (inserted on the first
    release, updated afterwards) and publishes the `<slug>-vX.Y.Z` GitHub Release.
@@ -63,7 +65,8 @@ Agents: the **`/release <slug>`** skill (`.cursor/skills/release/SKILL.md`) runs
    accent theme if it needs a new colour. The new plugin PR's "Site listing" block has the copy. Merging deploys the site.
 4. Smoke test: `/plugins/<slug>` shows both downloads at the new version; the Animal Software Center offers Install.
 
-Updates later are steps 1–2 only (bump `VERSION`, run the workflow).
+Updates later: bump `VERSION` in the PR; merging it releases Mac + Windows automatically. A merge without a
+`VERSION` bump releases nothing.
 
 Signing identities and the notary key live only in repo secrets ([docs/GITHUB_ACTIONS_SECRETS.md](GITHUB_ACTIONS_SECRETS.md));
 contributors never need Apple credentials.

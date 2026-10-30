@@ -1,0 +1,60 @@
+# Release (Mac + Windows) every plugin whose plugins/<slug>/VERSION has no <slug>-vX.Y.Z tag yet, once Build is
+# green on main. Bump VERSION in a PR to ship it on merge. Listing a new plugin on animal.audio stays manual (/release).
+name: Auto release
+
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  detect:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      slugs: ${{ steps.find.outputs.slugs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Find plugins with an untagged VERSION
+        id: find
+        run: |
+          set -euo pipefail
+          git fetch --tags --force origin
+          slugs=()
+          for slug in $(python3 -c "import sys; sys.path.insert(0,'scripts'); from lib.plugin_release import list_plugin_slugs; print(' '.join(list_plugin_slugs()))"); do
+            tag=$(python3 scripts/read_plugin_version.py "$slug" --tag)
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "$tag already released"
+            else
+              echo "$tag will be released"
+              slugs+=("$slug")
+            fi
+          done
+          echo "slugs=$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:]))' ${slugs[@]+"${slugs[@]}"})" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: detect
+    if: needs.detect.outputs.slugs != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: ${{ fromJSON(needs.detect.outputs.slugs) }}
+        platform: [mac, win]
+    uses: ./.github/workflows/release-plugin.yml
+    with:
+      plugin: ${{ matrix.plugin }}
+      platform: ${{ matrix.platform }}
+      ref: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit
