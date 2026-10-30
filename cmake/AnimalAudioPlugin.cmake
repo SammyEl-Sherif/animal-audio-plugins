@@ -3,19 +3,24 @@
 #     PLUGIN_CODE   Duck          # unique 4 chars, at least one uppercase
 #     [DESCRIPTION  "..."]
 #     [IS_SYNTH FALSE]
+#     [NEEDS_MIDI_INPUT FALSE]  # TRUE gives the effect a MIDI input (e.g. notes that steer it)
 #     [BUNDLE_ID    com.animalaudio.duck]
 #     SOURCES       a.cpp b.cpp ...)
 #
 # Wraps juce_add_plugin with the Animal Audio defaults (manufacturer, VST3 only,
 # Ableton-friendly category, shared libs linked, warnings on).
 function(aa_add_plugin target)
-    cmake_parse_arguments(AA "" "PRODUCT_NAME;PLUGIN_CODE;DESCRIPTION;IS_SYNTH;BUNDLE_ID;VERSION" "SOURCES" ${ARGN})
+    cmake_parse_arguments(AA "" "PRODUCT_NAME;PLUGIN_CODE;DESCRIPTION;IS_SYNTH;NEEDS_MIDI_INPUT;BUNDLE_ID;VERSION"
+                          "SOURCES" ${ARGN})
 
     if(NOT AA_PRODUCT_NAME OR NOT AA_PLUGIN_CODE)
         message(FATAL_ERROR "aa_add_plugin(${target}): PRODUCT_NAME and PLUGIN_CODE are required")
     endif()
     if(NOT AA_DESCRIPTION)
         set(AA_DESCRIPTION "${AA_PRODUCT_NAME} by Animal Audio")
+    endif()
+    if(NOT AA_NEEDS_MIDI_INPUT)
+        set(AA_NEEDS_MIDI_INPUT FALSE)
     endif()
     if(NOT AA_IS_SYNTH)
         set(AA_IS_SYNTH FALSE)
@@ -46,7 +51,7 @@ function(aa_add_plugin target)
         FORMATS ${_formats}
         VST3_CATEGORIES Fx
         IS_SYNTH ${AA_IS_SYNTH}
-        NEEDS_MIDI_INPUT FALSE
+        NEEDS_MIDI_INPUT ${AA_NEEDS_MIDI_INPUT}
         NEEDS_MIDI_OUTPUT FALSE
         DESCRIPTION "${AA_DESCRIPTION}"
         COPY_PLUGIN_AFTER_BUILD ${AA_COPY_PLUGINS_AFTER_BUILD})
