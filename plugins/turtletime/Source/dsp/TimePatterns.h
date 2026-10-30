@@ -35,26 +35,23 @@ inline constexpr std::array<std::string_view, kPatternsPerGroup> kLengthNames{"1
                                                                               "3/8",  "1/2",  "1 BAR", "2 BAR"};
 
 inline constexpr std::array<TimePattern, kNumPatterns> kPatterns{{
-    {"Half 1/32", "Half speed, one octave down, retriggered every 1/32 note.", 0.5f, 0.125, 0.0, TimeMode::CatchUp},
-    {"Half 1/16", "Half speed, one octave down, retriggered every 1/16 note.", 0.5f, 0.25, 0.0, TimeMode::CatchUp},
-    {"Half 1/8", "Half speed, one octave down, retriggered every 1/8 note.", 0.5f, 0.5, 0.0, TimeMode::CatchUp},
-    {"Half 1/4", "Half speed, one octave down, retriggered every beat.", 0.5f, 1.0, 0.0, TimeMode::CatchUp},
-    {"Half 3/8", "Half speed, one octave down, retriggered every dotted quarter.", 0.5f, 1.5, 0.0, TimeMode::CatchUp},
-    {"Half 1/2", "Half speed, one octave down, retriggered every half note.", 0.5f, 2.0, 0.0, TimeMode::CatchUp},
-    {"Half 1 Bar", "Half speed, one octave down, across one bar. The classic half-time.", 0.5f, 4.0, 0.0,
-     TimeMode::CatchUp},
-    {"Half 2 Bar", "Half speed, one octave down, across two bars.", 0.5f, 8.0, 0.0, TimeMode::CatchUp},
+    {"Half 1/32", "Half speed, retriggered every 1/32 note.", 0.5f, 0.125, 0.0, TimeMode::CatchUp},
+    {"Half 1/16", "Half speed, retriggered every 1/16 note.", 0.5f, 0.25, 0.0, TimeMode::CatchUp},
+    {"Half 1/8", "Half speed, retriggered every 1/8 note.", 0.5f, 0.5, 0.0, TimeMode::CatchUp},
+    {"Half 1/4", "Half speed, retriggered every beat.", 0.5f, 1.0, 0.0, TimeMode::CatchUp},
+    {"Half 3/8", "Half speed, retriggered every dotted quarter.", 0.5f, 1.5, 0.0, TimeMode::CatchUp},
+    {"Half 1/2", "Half speed, retriggered every half note.", 0.5f, 2.0, 0.0, TimeMode::CatchUp},
+    {"Half 1 Bar", "Half speed across one bar. The classic half-time.", 0.5f, 4.0, 0.0, TimeMode::CatchUp},
+    {"Half 2 Bar", "Half speed across two bars.", 0.5f, 8.0, 0.0, TimeMode::CatchUp},
 
-    {"Slow 1/32", "Quarter speed, two octaves down, retriggered every 1/32 note.", 0.25f, 0.125, 0.0,
-     TimeMode::CatchUp},
-    {"Slow 1/16", "Quarter speed, two octaves down, retriggered every 1/16 note.", 0.25f, 0.25, 0.0, TimeMode::CatchUp},
-    {"Slow 1/8", "Quarter speed, two octaves down, retriggered every 1/8 note.", 0.25f, 0.5, 0.0, TimeMode::CatchUp},
-    {"Slow 1/4", "Quarter speed, two octaves down, retriggered every beat.", 0.25f, 1.0, 0.0, TimeMode::CatchUp},
-    {"Slow 3/8", "Quarter speed, two octaves down, retriggered every dotted quarter.", 0.25f, 1.5, 0.0,
-     TimeMode::CatchUp},
-    {"Slow 1/2", "Quarter speed, two octaves down, retriggered every half note.", 0.25f, 2.0, 0.0, TimeMode::CatchUp},
-    {"Slow 1 Bar", "Quarter speed, two octaves down, across one bar.", 0.25f, 4.0, 0.0, TimeMode::CatchUp},
-    {"Slow 2 Bar", "Quarter speed, two octaves down, across two bars.", 0.25f, 8.0, 0.0, TimeMode::CatchUp},
+    {"Slow 1/32", "Quarter speed, retriggered every 1/32 note.", 0.25f, 0.125, 0.0, TimeMode::CatchUp},
+    {"Slow 1/16", "Quarter speed, retriggered every 1/16 note.", 0.25f, 0.25, 0.0, TimeMode::CatchUp},
+    {"Slow 1/8", "Quarter speed, retriggered every 1/8 note.", 0.25f, 0.5, 0.0, TimeMode::CatchUp},
+    {"Slow 1/4", "Quarter speed, retriggered every beat.", 0.25f, 1.0, 0.0, TimeMode::CatchUp},
+    {"Slow 3/8", "Quarter speed, retriggered every dotted quarter.", 0.25f, 1.5, 0.0, TimeMode::CatchUp},
+    {"Slow 1/2", "Quarter speed, retriggered every half note.", 0.25f, 2.0, 0.0, TimeMode::CatchUp},
+    {"Slow 1 Bar", "Quarter speed across one bar.", 0.25f, 4.0, 0.0, TimeMode::CatchUp},
+    {"Slow 2 Bar", "Quarter speed across two bars.", 0.25f, 8.0, 0.0, TimeMode::CatchUp},
 
     {"Reverse 1/32", "Plays backwards, retriggered every 1/32 note.", -1.0f, 0.125, 0.0, TimeMode::CatchUp},
     {"Reverse 1/16", "Plays backwards, retriggered every 1/16 note.", -1.0f, 0.25, 0.0, TimeMode::CatchUp},
@@ -82,5 +79,21 @@ inline const TimePattern& patternAt(int index) noexcept
     if (index >= kNumPatterns)
         index = kNumPatterns - 1;
     return kPatterns[static_cast<std::size_t>(index)];
+}
+
+/** Only slowed-down playback lowers the pitch (reverse and repeat run at 1x), so only it can keep the pitch instead. */
+inline constexpr bool slowsDown(float rate) noexcept
+{
+    return rate > 0.0f && rate < 1.0f;
+}
+
+/** What a pattern does to pitch, for the readout; empty when it plays at 1x. */
+inline constexpr std::string_view pitchLabel(const TimePattern& pattern, bool keepPitch) noexcept
+{
+    if (!slowsDown(pattern.rate))
+        return {};
+    if (keepPitch)
+        return "PITCH KEPT";
+    return pattern.rate >= 0.5f ? "1 OCTAVE DOWN" : "2 OCTAVES DOWN";
 }
 } // namespace turtletime::dsp

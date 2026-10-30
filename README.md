@@ -81,7 +81,8 @@ on every beat and lets it swim back up along a curve you draw. No sidechain rout
 ## Turtle Time
 
 A tempo-synced time effect in the spirit of half-time tools: it plays the signal back slower (or backwards,
-or as a repeating slice) and jumps back onto the grid so the pitch drop stays in time. No separate sidechain.
+or as a repeating slice) and jumps back onto the grid so the slowed audio stays in time, with or without the
+pitch drop. No separate sidechain.
 
 - **32 time patterns** in a matrix: pick a behaviour row (HALF 0.5x, SLOW 0.25x, REVERSE, REPEAT slice loop)
   and a length column (1/32 up to 2 bars). The default is half speed across one bar.
@@ -91,8 +92,11 @@ or as a repeating slice) and jumps back onto the grid so the pitch drop stays in
 - **Display**: input (grey) and output (green) over the current window. The white line is "now"; the amber
   read head marks the audio actually being played, so you can see the lag.
 - **MIX**: dry/wet. 100% is the full effect (the default). 0% is a straight copy of the input. Mix moves are smoothed.
-- **Click-free**: pointer jumps crossfade over about 10 ms. The audio thread never allocates, locks, or does I/O.
-- **State**: pattern and mix are saved with the Live set (APVTS).
+- **PITCH**: `DROP` (the default) slows HALF and SLOW down like tape, one or two octaves lower. `KEEP` stretches
+  time but keeps the original pitch (overlapping, phase-aligned grains). REVERSE and REPEAT play at 1x either way.
+- **Click-free**: pointer jumps and pitch-mode switches crossfade over about 10 ms. The audio thread never
+  allocates, locks, or does I/O.
+- **State**: pattern, pitch mode and mix are saved with the Live set (APVTS).
 
 <p align="center">
   <img src="docs/images/turtletime-ui.png" alt="Turtle Time by Animal Audio" width="760">
