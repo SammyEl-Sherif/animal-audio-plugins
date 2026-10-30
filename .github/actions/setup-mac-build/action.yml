@@ -1,0 +1,38 @@
+name: Set up macOS build
+description: Ninja, ccache (one cache per key) and the cached FetchContent dependencies (JUCE, Catch2).
+
+inputs:
+  cache-key:
+    description: ccache key, one per independent build (e.g. the plugin slug)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install Ninja
+      shell: bash
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+        HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      run: command -v ninja >/dev/null || brew install ninja
+
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: mac-${{ inputs.cache-key }}
+        max-size: 1G
+
+    - name: Use ccache for CMake
+      shell: bash
+      run: |
+        {
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          echo "CMAKE_OBJCXX_COMPILER_LAUNCHER=ccache"
+        } >> "$GITHUB_ENV"
+
+    - name: Cache fetched dependencies
+      uses: actions/cache@v4
+      with:
+        path: build/_deps
+        key: deps-mac-${{ hashFiles('cmake/FetchDependencies.cmake') }}

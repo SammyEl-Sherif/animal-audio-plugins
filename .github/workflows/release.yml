@@ -1,0 +1,158 @@
+# Release plugins (macOS). On every push to main, plan_release.py picks each plugin with feat / fix / bugfix /
+# perf / breaking commits since its last <slug>-vX.Y.Z tag (or an untagged VERSION) and the next semver. Those
+# plugins are built, tested, signed and notarized in parallel; then the VERSION bumps are committed and tagged
+# and each plugin is uploaded to Supabase and published as a GitHub Release. Nothing is published unless every
+# build passes. Manual: Actions -> Release -> Run workflow (plugin + bump), or
+#   gh workflow run release.yml -f plugin=<slug> -f bump=patch
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: Plugin
+        type: choice
+        required: true
+        default: duck
+        options: # plugin-slugs
+          - duck
+          - parrot
+          - turtletime
+      bump:
+        description: Version (auto = from commits since the last tag, current = re-release the current version)
+        type: choice
+        default: auto
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+          - current
+      dry_run:
+        description: Dry run (build, sign and notarize only; no tag, upload or GitHub Release)
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AA_SUPABASE_PROJECT_REF: huivhdradgroykfvtclx
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      releases: ${{ steps.plan.outputs.releases }}
+      count: ${{ steps.plan.outputs.count }}
+      plugins: ${{ steps.plan.outputs.plugins }}
+      versions: ${{ steps.plan.outputs.versions }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Plan
+        id: plan
+        env:
+          PLUGIN: ${{ inputs.plugin }}
+          BUMP: ${{ inputs.bump }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/main ] && [ "$DRY_RUN" != true ]; then
+            echo "::error::Releases publish from main only; pick main or tick dry run."
+            exit 1
+          fi
+          git fetch --tags --force --quiet origin
+          args=()
+          if [ -n "$PLUGIN" ]; then args=(--plugin "$PLUGIN" --bump "$BUMP"); fi
+          python3 scripts/plan_release.py --github-output ${args[@]+"${args[@]}"}
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    uses: ./.github/workflows/build.yml
+    with:
+      plugins: ${{ needs.plan.outputs.plugins }}
+      versions: ${{ needs.plan.outputs.versions }}
+      release: true
+    secrets: inherit
+
+  tag:
+    needs: [plan, build]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # The main ruleset only lets this app (and admins) push without a PR.
+      - name: Bypass app token
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BYPASS_APP_ID }}
+          private-key: ${{ secrets.BYPASS_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app.outputs.token }}
+      - name: Commit VERSION bumps, tag and push
+        env:
+          RELEASES: ${{ needs.plan.outputs.releases }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          user_id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          export GIT_AUTHOR_NAME="${APP_SLUG}[bot]" GIT_COMMITTER_NAME="${APP_SLUG}[bot]"
+          export GIT_AUTHOR_EMAIL="${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+          python3 scripts/tag_release.py --releases "$RELEASES"
+
+  publish:
+    name: publish ${{ matrix.slug }} ${{ matrix.version }}
+    needs: [plan, tag]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.releases) }}
+    env:
+      DIST: dist/releases/${{ matrix.slug }}/${{ matrix.version }}
+      PKG: ${{ matrix.product }}-${{ matrix.version }}-mac-installer.pkg
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ matrix.slug }}
+          path: ${{ env.DIST }}
+
+      - name: Checkout animal-audio-web
+        uses: actions/checkout@v4
+        with:
+          repository: SammyEl-Sherif/animal-audio-web
+          path: animal-audio-web
+          token: ${{ secrets.AA_WEB_REPO_GITHUB_TOKEN || github.token }}
+
+      - name: Upload to Supabase and publish plugin_releases
+        env:
+          AA_WEB_REPO: ${{ github.workspace }}/animal-audio-web
+          AA_SUPABASE_ACCESS_TOKEN: ${{ secrets.AA_SUPABASE_ACCESS_TOKEN }}
+          AA_SUPABASE_DB_PASSWORD: ${{ secrets.AA_SUPABASE_DB_PASSWORD }}
+        run: python3 scripts/upload_plugin_release.py --manifest "$DIST/manifest-mac.json" --zip "$DIST/$PKG"
+
+      - uses: ./.github/actions/publish-plugin-github-release
+        with:
+          tag: ${{ matrix.tag }}
+          name: ${{ matrix.product }} ${{ matrix.version }}
+          body: ${{ matrix.notes }}
+          files: |
+            ${{ env.DIST }}/${{ env.PKG }}
+            ${{ env.DIST }}/manifest-mac.json

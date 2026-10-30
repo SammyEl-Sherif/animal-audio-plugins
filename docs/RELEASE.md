@@ -1,51 +1,74 @@
 # Plugin release pipeline
 
-## Version (independent per plugin)
+macOS only during the beta (notarized `.pkg`). The Windows scripts (`release_win_plugin.ps1`, `package_win_plugin.ps1`)
+are kept for later but not run by CI.
+
+## Version (independent per plugin, semantic)
 
 | Source | Role |
 | --- | --- |
-| `plugins/<slug>/VERSION` | **Semver for that product only** (e.g. Duck `1.0.0`) |
+| `plugins/<slug>/VERSION` | **Semver for that product only**; CI commits the bump on release |
+| Git tag `<slug>-vX.Y.Z` | Marks what shipped; the base for the next bump |
 | Plugin UI build stamp | Same version as that plugin’s VERSION file |
 | Artifacts | `dist/releases/<slug>/<version>/…` |
-| GitHub Releases | Tag `<slug>-vX.Y.Z` (e.g. `duck-v1.0.0`) |
 | animal.audio | `plugin_releases` row per slug + platform (upload updates checksums) |
 
-```bash
-python3 scripts/read_plugin_version.py duck
-python3 scripts/read_plugin_version.py duck --tag
-```
+The next version comes from [conventional commits](https://www.conventionalcommits.org/) since the plugin's last tag
+that touch `plugins/<slug>/`, `shared/` (except `shared/testing/`), `cmake/` or the root `CMakeLists.txt`
+([`scripts/plan_release.py`](../scripts/plan_release.py)):
 
-**Ship a patch for one plugin:** edit only `plugins/duck/VERSION` (or the relevant slug), commit, run that plugin’s release (the upload updates its `plugin_releases` rows) — no monorepo-wide bump.
+| Commit | Bump |
+| --- | --- |
+| `feat!: …`, `fix(duck)!: …` or a `BREAKING CHANGE:` footer | major |
+| `feat: …` / `feat(duck): …` | minor |
+| `fix:` / `bugfix:` / `perf:` | patch |
+| `chore:`, `docs:`, `refactor:`, `test:`, `ci:`, anything else | none |
+
+- A plugin with no tag yet releases its `VERSION` as is (first release).
+- Bumping `VERSION` by hand in a PR above the last tag releases exactly that version.
+- Changes in `shared/` / `cmake/` release every plugin (they ship in every binary); use `refactor:` / `chore:` when
+  that is not wanted.
+
+Preview locally: `python3 scripts/plan_release.py` (every PR also shows it in the **release plan** job summary).
 
 Root `CMakeLists.txt` `project(AnimalAudio VERSION 0.0.0)` is the monorepo marker only, not a product version.
 
 ---
 
-## Commands
+## Workflows
 
-| Goal | Command |
-| --- | --- |
-| Mac (notarized .pkg) | `source ~/.appstoreconnect/notary.env && ./scripts/release_plugin.sh <slug> --upload` |
-| Windows | `.\scripts\release_win_plugin.ps1 -Plugin <slug> -Upload` |
-| GitHub Actions | **Release plugin** — choose the plugin and platform |
+| Workflow | When | What |
+| --- | --- | --- |
+| `ci.yml` (**CI**) | every PR | `build.yml` + release-plan preview; `ci-ok` is the one required check |
+| `build.yml` (**Build**, reusable) | called by CI / Release | lint (clang-format, repo checks) ∥ one macOS job per plugin: build, ctest, pluginval 10, install smoke test; with `release: true` also sign, notarize, `.pkg`, validate |
+| `release.yml` (**Release**) | push to `main`, or manual | plan → build (release) → commit VERSION bumps + tags → per plugin: Supabase upload + GitHub Release |
 
-Every plugin goes through the same pipeline; nothing in the scripts or workflow is per plugin. The
-**Release plugin** dropdown lists each `plugins/<slug>` folder (`new_plugin.py` adds a new one). Wrappers
-`./scripts/release_duck.sh` and `release_win_duck.ps1` still work.
+Release on merge is automatic. Nothing is tagged or uploaded unless every plugin build in that run passed; re-run
+the failed jobs and the rest of the run continues. The tag commit is pushed by the bypass GitHub App
+(`BYPASS_APP_ID` / `BYPASS_APP_PRIVATE_KEY`), the only non-admin actor allowed past the `main` ruleset.
+
+**Manual release:** Actions → **Release** → Run workflow, pick the plugin and a bump:
+
+```bash
+gh workflow run release.yml -f plugin=duck                    # auto: from commits since the last tag
+gh workflow run release.yml -f plugin=duck -f bump=patch      # patch | minor | major
+gh workflow run release.yml -f plugin=duck -f bump=current    # re-release the current version (re-upload)
+gh workflow run release.yml -f plugin=duck -f dry_run=true    # build + sign + notarize only (any branch)
+```
+
+Local (Mac with the signing setup): `source ~/.appstoreconnect/notary.env && ./scripts/release_plugin.sh <slug> --upload`.
 
 ---
 
-## What each platform ships
+## What ships
 
 | Platform | Artifact | Notes |
 | --- | --- | --- |
 | Mac | `<Product>-<ver>-mac-installer.pkg` | Bundle signed + notarized + stapled, then the `.pkg` is productsigned (Developer ID Installer) + notarized + stapled. Package id `com.animalaudio.<slug>.vst3`. |
-| Windows | `<Product>-<ver>-win-vst3.zip` | Bundle, `Animal-Audio-<Product>-EULA.txt`, notices, and `Install-<Product>.ps1` rendered from `scripts/installers/win/Install-Plugin.ps1`. |
 
-Installer text comes from templates in `scripts/installers/mac/` and `scripts/installers/win/`, filled with the plugin's
-`PRODUCT_NAME` (from `plugins/<slug>/CMakeLists.txt`) split into words (`HoneyBadger` → "Honey Badger"). Preview a
-plugin's Mac installer resources without signing:
-`scripts/build_mac_pkg.sh <slug> <path/to/Product.vst3> <version> /tmp/pkg-preview --render-only`.
+Installer text comes from templates in `scripts/installers/mac/`, filled with the plugin's `PRODUCT_NAME` (from
+`plugins/<slug>/CMakeLists.txt`) split into words (`HoneyBadger` → "Honey Badger"). Preview a plugin's Mac installer
+resources without signing: `scripts/build_mac_pkg.sh <slug> <path/to/Product.vst3> <version> /tmp/pkg-preview --render-only`.
 
 ---
 
@@ -53,21 +76,15 @@ plugin's Mac installer resources without signing:
 
 Agents: the **`/release <slug>`** skill (`.cursor/skills/release/SKILL.md`) runs these steps and checks each result.
 
-1. The plugin is merged to `main` with `plugins/<slug>/VERSION`, green CI and pluginval (`scripts/verify_plugin.sh <Name>`).
-   Set the public version in that file first if needed (own small PR).
-2. Automatic: once **Build** is green on `main`, **Auto release** (`auto-release.yml`) runs **Release plugin** for
-   `mac` and `win` for every plugin whose `<slug>-vX.Y.Z` tag does not exist yet. Manual run (re-run a failed
-   platform, or upload-free dry run): GitHub Actions → **Release plugin** → choose the plugin, platform `mac` / `win`
-   (`gh workflow run release-plugin.yml -f plugin=<slug> -f platform=mac`). Each run builds, tests, signs, notarizes
-   (mac), validates, uploads to Supabase Storage, publishes the active `plugin_releases` row (inserted on the first
-   release, updated afterwards) and publishes the `<slug>-vX.Y.Z` GitHub Release.
+1. Merge the plugin to `main` with `plugins/<slug>/VERSION` (set the public version in the PR) and green CI.
+2. Automatic: the **Release** run for that merge ships it (no tag yet → first release). Check it with
+   `gh run list --workflow release.yml --limit 3`.
 3. List it on the site: PR in **animal-audio-web** adding the plugin to `packages/catalog/src/plugins.ts`
    (`slug` = `<slug>`, `bundleName` = `<PRODUCT_NAME>.vst3`) and `src/modules/LandingPage/data/plugins.ts`, plus an
    accent theme if it needs a new colour. The new plugin PR's "Site listing" block has the copy. Merging deploys the site.
-4. Smoke test: `/plugins/<slug>` shows both downloads at the new version; the Animal Software Center offers Install.
+4. Smoke test: `/plugins/<slug>` shows the Mac download at the new version; the Animal Software Center offers Install.
 
-Updates later: bump `VERSION` in the PR; merging it releases Mac + Windows automatically. A merge without a
-`VERSION` bump releases nothing.
+Updates later: merge `feat:` / `fix:` commits; the merge releases them.
 
 Signing identities and the notary key live only in repo secrets ([docs/GITHUB_ACTIONS_SECRETS.md](GITHUB_ACTIONS_SECRETS.md));
 contributors never need Apple credentials.
@@ -79,14 +96,16 @@ contributors never need Apple credentials.
 | Script | Role |
 | --- | --- |
 | [`scripts/lib/plugin_release.py`](../scripts/lib/plugin_release.py) | Catalog: slug, target, product name, paths |
-| [`scripts/release_plugin.sh`](../scripts/release_plugin.sh) | Mac orchestrator |
+| [`scripts/plan_release.py`](../scripts/plan_release.py) | Which plugins release, at which version (tags + conventional commits) |
+| [`scripts/tag_release.py`](../scripts/tag_release.py) | Commit the VERSION bumps, tag `<slug>-vX.Y.Z`, push (never force) |
+| [`scripts/release_plugin.sh`](../scripts/release_plugin.sh) | Mac orchestrator (CI: `AA_SKIP_BUILD=1 … --skip-verify` signs the bundle the build job tested) |
 | [`scripts/release_mac_plugin.sh`](../scripts/release_mac_plugin.sh) | Build, sign, notarize, staple the bundle |
 | [`scripts/build_mac_pkg.sh`](../scripts/build_mac_pkg.sh) | Signed + notarized `.pkg` from the stapled bundle |
-| [`scripts/release_win_plugin.ps1`](../scripts/release_win_plugin.ps1) | Windows orchestrator |
 | [`scripts/validate_plugin_release.py`](../scripts/validate_plugin_release.py) | Validate `.pkg` / `.zip` |
 | [`scripts/upload_plugin_release.py`](../scripts/upload_plugin_release.py) | Supabase Storage upload + publish the active `plugin_releases` row (insert on first release) |
 
-Secrets: [docs/GITHUB_ACTIONS_SECRETS.md](GITHUB_ACTIONS_SECRETS.md).
+Reusable actions: `.github/actions/setup-mac-build` (Ninja, ccache, cached JUCE/Catch2), `apple-signing`
+(keychain + notary settings), `publish-plugin-github-release`.
 
 ---
 
@@ -96,7 +115,4 @@ Secrets: [docs/GITHUB_ACTIONS_SECRETS.md](GITHUB_ACTIONS_SECRETS.md).
 python3 scripts/validate_plugin_release.py --plugin duck --platform mac \
   --artifact dist/releases/duck/1.0.0/Duck-1.0.0-mac-installer.pkg \
   --require-notarized
-
-python3 scripts/validate_plugin_release.py --plugin duck --platform win \
-  --artifact dist/releases/duck/1.0.0/Duck-1.0.0-win-vst3.zip --allow-unsigned
 ```

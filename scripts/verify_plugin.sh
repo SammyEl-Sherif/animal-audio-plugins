@@ -5,7 +5,7 @@
 #   scripts/verify_plugin.sh Wobble --release   # no screenshots, no real-mouse (release gate)
 #
 # Needs: cmake, a C++17 compiler, Ninja (optional), xvfb-run (Linux, for headless UI tests) and, for the
-# VST3 validation step, pluginval on PATH or in $PLUGINVAL (see .github/workflows/build.yml).
+# VST3 validation step, pluginval on PATH or in $PLUGINVAL (CI downloads it in .github/workflows/build.yml).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

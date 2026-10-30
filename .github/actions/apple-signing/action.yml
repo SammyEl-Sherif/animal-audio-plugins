@@ -1,0 +1,75 @@
+name: Apple signing
+description: >
+  Import the Developer ID Application + Installer certificates into a temporary keychain and export the
+  codesign / notarytool settings (AA_CODESIGN_IDENTITY, AA_NOTARY_*) for later steps.
+
+inputs:
+  p12-base64: { description: Developer ID Application .p12 (base64), required: true }
+  p12-password: { description: Password of that .p12, required: true }
+  installer-p12-base64: { description: Developer ID Installer .p12 (base64), required: true }
+  installer-p12-password: { description: Password of that .p12 (defaults to p12-password), required: false }
+  codesign-identity: { description: Developer ID Application identity, required: true }
+  installer-codesign-identity: { description: Developer ID Installer identity (found in the keychain when empty), required: false }
+  notary-p8-base64: { description: App Store Connect API key .p8 (base64), required: true }
+  notary-key-id: { description: App Store Connect API key id, required: true }
+  notary-issuer: { description: App Store Connect issuer id, required: true }
+
+runs:
+  using: composite
+  steps:
+    - name: Import Developer ID certificates
+      shell: bash
+      env:
+        P12_BASE64: ${{ inputs.p12-base64 }}
+        P12_PASSWORD: ${{ inputs.p12-password }}
+        INSTALLER_P12_BASE64: ${{ inputs.installer-p12-base64 }}
+        INSTALLER_P12_PASSWORD: ${{ inputs.installer-p12-password }}
+      run: |
+        set -euo pipefail
+        if [ -z "${P12_BASE64:-}" ] || [ -z "${INSTALLER_P12_BASE64:-}" ]; then
+          echo "::error::AA_DEVELOPER_ID_P12_BASE64 and AA_DEVELOPER_ID_INSTALLER_P12_BASE64 secrets are required (docs/GITHUB_ACTIONS_SECRETS.md)."
+          exit 1
+        fi
+        echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+        echo "$INSTALLER_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/devid-installer.p12"
+        security create-keychain -p actions build.keychain
+        security list-keychains -d user -s build.keychain login.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p actions build.keychain
+        # Notarization can take many minutes; keep the keychain unlocked for productsign afterwards.
+        security set-keychain-settings -lut 21600 build.keychain
+        # Both .p12 files carry the same private key; its ACL is fixed by the first import (the second one
+        # finds the key already present), so every tool that signs with it must be trusted here. A tool
+        # missing from the ACL hangs CI on an invisible keychain prompt.
+        security import "$RUNNER_TEMP/devid.p12" -k build.keychain -P "$P12_PASSWORD" \
+          -T /usr/bin/codesign -T /usr/bin/productsign -T /usr/bin/productbuild -T /usr/bin/security
+        security import "$RUNNER_TEMP/devid-installer.p12" -k build.keychain -P "${INSTALLER_P12_PASSWORD:-$P12_PASSWORD}" \
+          -T /usr/bin/productsign -T /usr/bin/productbuild -T /usr/bin/security
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
+        rm -f "$RUNNER_TEMP/devid.p12" "$RUNNER_TEMP/devid-installer.p12"
+        if ! security find-identity -v build.keychain | grep -q "Developer ID Installer:"; then
+          echo "::error::Developer ID Installer identity not found after import."
+          security find-certificate -a build.keychain | grep '"labl"' || true
+          security find-identity build.keychain || true
+          exit 1
+        fi
+
+    - name: Export notarization settings
+      shell: bash
+      env:
+        P8_BASE64: ${{ inputs.notary-p8-base64 }}
+        CODESIGN_IDENTITY: ${{ inputs.codesign-identity }}
+        INSTALLER_CODESIGN_IDENTITY: ${{ inputs.installer-codesign-identity }}
+        NOTARY_KEY_ID: ${{ inputs.notary-key-id }}
+        NOTARY_ISSUER: ${{ inputs.notary-issuer }}
+      run: |
+        set -euo pipefail
+        key="$RUNNER_TEMP/AuthKey.p8"
+        echo "$P8_BASE64" | base64 --decode > "$key"
+        {
+          echo "AA_CODESIGN_IDENTITY=$CODESIGN_IDENTITY"
+          echo "AA_INSTALLER_CODESIGN_IDENTITY=$INSTALLER_CODESIGN_IDENTITY"
+          echo "AA_NOTARY_KEY=$key"
+          echo "AA_NOTARY_KEY_ID=$NOTARY_KEY_ID"
+          echo "AA_NOTARY_ISSUER=$NOTARY_ISSUER"
+        } >> "$GITHUB_ENV"
