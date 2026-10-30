@@ -21,7 +21,7 @@ on:
           - parrot
           - turtletime
       bump:
-        description: Version (auto = from commits since the last tag, current = re-release the current version)
+        description: 'Version: auto = from feat/fix commits since the last tag (fails if none), patch/minor/major = bump, current = re-upload the current version'
         type: choice
         default: auto
         options:
@@ -71,7 +71,7 @@ jobs:
           fi
           git fetch --tags --force --quiet origin
           args=()
-          if [ -n "$PLUGIN" ]; then args=(--plugin "$PLUGIN" --bump "$BUMP"); fi
+          if [ -n "$PLUGIN" ]; then args=(--plugin "$PLUGIN" --bump "$BUMP" --require); fi
           python3 scripts/plan_release.py --github-output ${args[@]+"${args[@]}"}
 
   build:

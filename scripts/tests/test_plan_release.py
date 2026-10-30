@@ -142,6 +142,17 @@ class TagReleaseTests(unittest.TestCase):
             self.assertEqual((repo / "plugins/owl/VERSION").read_text(), "3.0.0\n")
 
 
+class RequireTests(unittest.TestCase):
+    def test_require_fails_when_nothing_to_release(self) -> None:
+        original = plan_release.plan
+        plan_release.plan = lambda *a, **k: []
+        try:
+            self.assertEqual(plan_release.main(["--plugin", "duck", "--require"]), 1)
+            self.assertEqual(plan_release.main(["--plugin", "duck"]), 0)
+        finally:
+            plan_release.plan = original
+
+
 class SummaryTests(unittest.TestCase):
     def test_empty_plan(self) -> None:
         self.assertIn("Nothing to release", plan_release.summary([]))

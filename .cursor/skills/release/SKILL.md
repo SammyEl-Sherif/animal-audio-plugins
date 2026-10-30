@@ -44,7 +44,7 @@ sleep 5; run=$(gh run list --workflow release.yml --limit 1 --json databaseId -q
 gh run watch "$run" --exit-status
 ```
 
-Check the listed run is the one you started (`gh run view "$run"`). `auto` with nothing releasable plans nothing;
+Check the listed run is the one you started (`gh run view "$run"`). `auto` fails when nothing is releasable;
 pick a bump. `current` re-uploads the current version (tag left in place). `-f dry_run=true` builds, signs and
 notarizes without publishing (any branch).
 
