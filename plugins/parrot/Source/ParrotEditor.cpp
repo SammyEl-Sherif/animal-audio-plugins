@@ -2,6 +2,7 @@
 
 #include <animalaudio/core/BuildStamp.h>
 #include <animalaudio/core/TextFormat.h>
+#include <animalaudio/ui/Drawing.h>
 #include <animalaudio/ui/Panels.h>
 
 #include <algorithm>
@@ -13,6 +14,7 @@ namespace
 {
 using animalaudio::core::formatCents;
 using animalaudio::core::joinWithDots;
+using animalaudio::ui::drawArrowGlyph;
 using animalaudio::ui::makeFont;
 
 constexpr float kHeaderH = 68.0f;
@@ -58,18 +60,6 @@ juce::String modeBlurb(dsp::Mode mode)
     }
     return "Moves the voice by PITCH. Formants stay put.";
 }
-
-void arrowGlyph(juce::Graphics& g, juce::Rectangle<float> area, juce::Colour colour, bool right)
-{
-    const auto box = area.withSizeKeepingCentre(area.getHeight() * 0.7f, area.getHeight());
-    juce::Path arrow;
-    if (right)
-        arrow.addTriangle(box.getX(), box.getY(), box.getRight(), box.getCentreY(), box.getX(), box.getBottom());
-    else
-        arrow.addTriangle(box.getRight(), box.getY(), box.getX(), box.getCentreY(), box.getRight(), box.getBottom());
-    g.setColour(colour);
-    g.fillPath(arrow);
-}
 } // namespace
 
 ParrotEditor::ParrotEditor(ParrotProcessor& plugin)
@@ -107,8 +97,9 @@ ParrotEditor::ParrotEditor(ParrotProcessor& plugin)
         modePills->getPill(i).setButtonText(modeChoice.choices[i].toUpperCase());
     addAndMakeVisible(*modePills);
 
-    noteDown.glyph = [](juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c) { arrowGlyph(g, r, c, false); };
-    noteUp.glyph = [](juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c) { arrowGlyph(g, r, c, true); };
+    noteDown.glyph = [](juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c)
+    { drawArrowGlyph(g, r, c, false); };
+    noteUp.glyph = [](juce::Graphics& g, juce::Rectangle<float> r, juce::Colour c) { drawArrowGlyph(g, r, c, true); };
     noteDown.setTooltip("Robot note down a semitone");
     noteUp.setTooltip("Robot note up a semitone");
     noteDown.onClick = [this] { stepNote(-1); };
@@ -279,8 +270,8 @@ void ParrotEditor::paintDisplay(juce::Graphics& g, juce::Rectangle<float> area) 
     };
     const float left = area.getX() + 18.0f;
     noteBlock(left, "INPUT", shownInput, palette.text);
-    arrowGlyph(g, juce::Rectangle<float>(left + 122.0f, top + 22.0f, 14.0f, 14.0f), palette.textDim.withAlpha(0.6f),
-               true);
+    drawArrowGlyph(g, juce::Rectangle<float>(left + 122.0f, top + 22.0f, 14.0f, 14.0f), palette.textDim.withAlpha(0.6f),
+                   true);
     noteBlock(left + 152.0f, "OUTPUT", shownOutput, palette.accent);
 
     const bool fine = value(ids::fine) > 0.5f;

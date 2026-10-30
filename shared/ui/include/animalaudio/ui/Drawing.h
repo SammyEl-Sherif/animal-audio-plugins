@@ -11,4 +11,7 @@ void drawRipples(juce::Graphics& g, juce::Rectangle<float> area, juce::Colour co
 
 /** Polyline of a curve inside `area` (y = 1 at the top edge). */
 juce::Path makeCurvePath(const dsp::ShapeCurve& curve, juce::Rectangle<float> area, int steps = 48);
+
+/** Solid triangle pointing left or right, centred in `area` (stepper buttons, "becomes" arrows). */
+void drawArrowGlyph(juce::Graphics& g, juce::Rectangle<float> area, juce::Colour colour, bool right);
 } // namespace animalaudio::ui

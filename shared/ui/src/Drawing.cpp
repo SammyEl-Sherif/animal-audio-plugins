@@ -42,4 +42,16 @@ juce::Path makeCurvePath(const dsp::ShapeCurve& curve, juce::Rectangle<float> ar
     }
     return p;
 }
+
+void drawArrowGlyph(juce::Graphics& g, juce::Rectangle<float> area, juce::Colour colour, bool right)
+{
+    const auto box = area.withSizeKeepingCentre(area.getHeight() * 0.7f, area.getHeight());
+    juce::Path arrow;
+    if (right)
+        arrow.addTriangle(box.getX(), box.getY(), box.getRight(), box.getCentreY(), box.getX(), box.getBottom());
+    else
+        arrow.addTriangle(box.getRight(), box.getY(), box.getX(), box.getCentreY(), box.getRight(), box.getBottom());
+    g.setColour(colour);
+    g.fillPath(arrow);
+}
 } // namespace animalaudio::ui
