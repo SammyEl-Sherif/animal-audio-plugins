@@ -1,5 +1,5 @@
 name: Publish plugin GitHub Release
-description: Tag slug-vX.Y.Z and attach release artifacts (one tag per plugin + semver).
+description: Create/update the GitHub Release for an existing slug-vX.Y.Z tag and attach the release artifacts.
 
 inputs:
   tag:
@@ -8,6 +8,10 @@ inputs:
   name:
     description: Release title (e.g. Duck 1.0.0)
     required: true
+  body:
+    description: Release notes (markdown)
+    required: false
+    default: ''
   files:
     description: Newline-separated artifact paths
     required: true
@@ -20,6 +24,6 @@ runs:
       with:
         tag_name: ${{ inputs.tag }}
         name: ${{ inputs.name }}
-        generate_release_notes: true
+        body: ${{ inputs.body }}
         fail_on_unmatched_files: true
         files: ${{ inputs.files }}

@@ -38,7 +38,7 @@ and [AGENTS.md](AGENTS.md).
 | --- | --- |
 | **`/setup`** | New dev or tester: clone, build, install VST3s, rescan in Ableton |
 | **`/vst`** | New Animal Audio effect: animal-themed UI + shared libraries (layout is up to the concept), ready to release |
-| **`/release`** | Maintainers: ship a merged plugin (notarized Mac `.pkg`, Windows zip, GitHub Release) and list it on animal.audio |
+| **`/release`** | Maintainers: ship a merged plugin (notarized Mac `.pkg`, GitHub Release) and list it on animal.audio |
 
 ## The series
 
@@ -204,9 +204,10 @@ works for every plugin: pass its slug (the folder name under `plugins/`, e.g. `d
 
 1. Complete [docs/APPLE_DEVELOPER_SETUP.md](docs/APPLE_DEVELOPER_SETUP.md).
 2. Run the pipeline: `./scripts/release_plugin.sh <slug>` (optionally `--upload`) — see [docs/RELEASE.md](docs/RELEASE.md).
-   Or GitHub Actions → **Release plugin**, slug + platform `mac` (signs and notarizes with the repo secrets).
+   Normally automatic: merging `feat:` / `fix:` commits to `main` releases the plugins they touch. Manual: GitHub
+   Actions → **Release** (plugin + bump), or `gh workflow run release.yml -f plugin=<slug> -f bump=patch`.
 3. Validate an existing artifact: `python3 scripts/validate_plugin_release.py --plugin <slug> --platform mac --artifact … --require-notarized`.
-4. Windows: `.\scripts\release_win_plugin.ps1 -Plugin <slug> -Upload` (or GitHub Actions → **Release plugin**, platform `win`).
+4. Windows releases are paused during the beta (scripts kept: `scripts/release_win_plugin.ps1`).
 
 Upload paths and Supabase steps: [docs/RELEASE.md](docs/RELEASE.md) and **animal-audio-web** `docs/DOWNLOADS_LAUNCH.md`.
 

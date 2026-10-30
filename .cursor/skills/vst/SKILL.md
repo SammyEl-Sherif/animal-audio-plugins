@@ -241,18 +241,19 @@ same words from `PRODUCT_NAME` by splitting the PascalCase.
 
 ### Release readiness (the plugin must be shippable as merged)
 
-After merge a maintainer releases it with `/release <name_lower>` and no further code changes. Check:
+Merging releases it automatically (first release = its VERSION; `release.yml`, macOS); the maintainer then lists it
+on the site with `/release <name_lower>`, with no further code changes. Check:
 
-- `plugins/<name_lower>/VERSION` exists and is semver (`0.1.0` from the scaffold; the maintainer picks the public
-  version at release time).
+- `plugins/<name_lower>/VERSION` exists and is semver (`0.1.0` from the scaffold). It ships as is on merge, so set the
+  public version the maintainer wants in this PR.
 - `PRODUCT_NAME` in `CMakeLists.txt` is the PascalCase target (no spaces); `getName()` / `theme.name` are its words
   ("HoneyBadger" → "Honey Badger" / "HONEY BADGER"). Installer text, the Windows install script and the release file
   names are derived from it automatically.
 - Plugin code and every parameter ID / ValueTree identifier are final: they are the saved-state contract once released.
-- `pluginval` passes at strictness 10 locally (CI runs 5 on Linux) and CI is green on Linux, macOS and Windows.
+- `pluginval` passes at strictness 10 locally and CI (`ci-ok`, macOS) is green.
 - `docs/images/<name_lower>-ui.png` is committed (README and the website product page use it).
 - No changes under `scripts/release*`, `scripts/build_mac_pkg.sh`, `scripts/installers/` or
-  `.github/workflows/release-plugin.yml` for this plugin. If the generic pipeline really cannot ship it, fix the
+  `.github/workflows/release.yml` for this plugin (the scaffold adds its slug to the dropdown). If the generic pipeline really cannot ship it, fix the
   generic code with tests in a separate PR; never add `if slug == ...` or a `release_<name>.sh` wrapper.
 
 ## 9. Docs

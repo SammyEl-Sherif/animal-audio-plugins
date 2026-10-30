@@ -1,154 +1,167 @@
+# Reusable: lint + one macOS job per plugin (build, ctest, pluginval, install smoke test). With `release: true`
+# each plugin job also signs, notarizes and packages the exact bundle it just tested and uploads it as the
+# `release-<slug>` artifact. Called by ci.yml (pull requests) and release.yml (main / manual releases).
 name: Build
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
+    inputs:
+      plugins:
+        description: JSON list of plugin slugs (default every plugin plus the new-plugin scaffold check)
+        type: string
+        default: ''
+      versions:
+        description: 'JSON object {slug: version} written to plugins/<slug>/VERSION before building'
+        type: string
+        default: '{}'
+      release:
+        description: Sign, notarize and package each plugin (needs the Apple secrets)
+        type: boolean
+        default: false
 
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  build:
+  lint:
     name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux
-            os: ubuntu-22.04
-          - name: macOS
-            os: macos-15
-          - name: Windows
-            os: windows-2022
-
+          - name: clang-format
+            run: |
+              command -v clang-format >/dev/null || { sudo apt-get update && sudo apt-get install -y clang-format; }
+              git ls-files '*.h' '*.cpp' | xargs clang-format --dry-run --Werror
+          - name: repo checks
+            run: scripts/check_repo.sh
     steps:
       - uses: actions/checkout@v4
+      - run: ${{ matrix.run }}
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      plugins: ${{ steps.list.outputs.plugins }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        env:
+          PLUGINS: ${{ inputs.plugins }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libasound2-dev libfreetype-dev libfontconfig1-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev \
-            libcurl4-openssl-dev xvfb
-
-      - name: Install Ninja (macOS)
-        if: runner.os == 'macOS'
-        run: brew install ninja
-
-      - name: Cache fetched dependencies
-        uses: actions/cache@v4
-        with:
-          path: build/_deps
-          key: deps-${{ github.event.repository.name }}-${{ runner.os }}-${{ hashFiles('cmake/FetchDependencies.cmake') }}
-
-      - name: Configure
-        shell: bash
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ runner.os != 'Windows' && '-G Ninja' || '' }}
-
-      - name: Build (VST3 + tests)
-        shell: bash
-        run: cmake --build build --config Release --parallel 4
-
-      - name: Test
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a ctest --test-dir build -C Release --output-on-failure
-          else
-            ctest --test-dir build -C Release --output-on-failure
+          if [ -z "$PLUGINS" ]; then
+            PLUGINS=$(python3 -c "import json,sys; sys.path.insert(0,'scripts'); from lib.plugin_release import list_plugin_slugs; print(json.dumps(list_plugin_slugs() + ['scaffoldcheck']))")
           fi
+          echo "plugins=$PLUGINS" >> "$GITHUB_OUTPUT"
 
-      - name: Install script smoke test (temp prefix, real OS tooling)
-        shell: bash
-        run: |
-          PY=python3; command -v python3 >/dev/null || PY=python
-          prefix="$RUNNER_TEMP/vst3-install-test"
-          $PY scripts/install_plugins.py --prefix "$prefix" --yes
-          $PY scripts/install_plugins.py --list --prefix "$prefix" | tee list.txt
-          grep -q "Duck.vst3" list.txt
-          if grep -q "not this checkout's commit" list.txt; then echo "installed build stamp does not match HEAD"; exit 1; fi
-          $PY scripts/install_plugins.py --uninstall --prefix "$prefix"
-          test -z "$(ls -A "$prefix")"
-
-      - name: Validate VST3 with pluginval (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          curl -sL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip
-          unzip -q pluginval.zip
-          for bundle in $(find build -type d -name '*.vst3' -prune); do
-            xvfb-run -a ./pluginval --strictness-level 5 --validate-in-process --timeout-ms 120000 "$bundle"
-          done
-
-      - name: Collect VST3 bundles
-        shell: bash
-        run: |
-          mkdir -p dist
-          find build -type d -name '*.vst3' -prune -exec cp -R {} dist/ \;
-          ls -la dist
-
-      - name: Upload VST3 bundles
-        uses: actions/upload-artifact@v4
-        with:
-          name: animal-audio-vst3-${{ runner.os }}
-          path: dist
-          if-no-files-found: error
-
-  scaffold:
-    name: new plugin scaffold builds and tests (Linux)
-    runs-on: ubuntu-22.04
+  plugin:
+    name: ${{ matrix.plugin }}
+    needs: matrix
+    runs-on: macos-15
+    # Build + tests ~5-10 min with a warm ccache; notarization (twice) can add several minutes.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: ${{ fromJSON(needs.matrix.outputs.plugins) }}
+    env:
+      SLUG: ${{ matrix.plugin }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libasound2-dev libfreetype-dev libfontconfig1-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev \
-            libcurl4-openssl-dev xvfb
-
-      - name: Cache fetched dependencies
-        uses: actions/cache@v4
-        with:
-          path: build/_deps
-          key: deps-scaffold-${{ github.event.repository.name }}-${{ runner.os }}-${{ hashFiles('cmake/FetchDependencies.cmake') }}
 
       - name: Scaffold a throwaway plugin
-        run: python3 scripts/new_plugin.py Scaffoldcheck --description "CI scaffold check" --no-readme
-
-      - name: Build and test it
+        if: matrix.plugin == 'scaffoldcheck'
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAA_PLUGINS=scaffoldcheck
-          cmake --build build --parallel 4 --target Scaffoldcheck_VST3 ScaffoldcheckTests
-          xvfb-run -a ctest --test-dir build --output-on-failure -R '^scaffoldcheck\.'
-
-      - name: Release metadata resolves
-        run: |
+          python3 scripts/new_plugin.py Scaffoldcheck --description "CI scaffold check" --no-readme
           python3 - <<'PY'
           import sys
           sys.path.insert(0, "scripts")
           from lib.plugin_release import get_plugin
           p = get_plugin("scaffoldcheck")
           assert p.bundle_name == "Scaffoldcheck.vst3" and p.mac_pkg_identifier == "com.animalaudio.scaffoldcheck.vst3", p
-          print(p)
           PY
 
-  format:
-    name: clang-format
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check formatting
+      - name: Set release version
+        if: fromJSON(inputs.versions)[matrix.plugin] != null
+        env:
+          VERSION: ${{ fromJSON(inputs.versions)[matrix.plugin] }}
+        # Pinning the SHA keeps the build stamp clean (the edited VERSION would otherwise mark it dirty).
         run: |
-          sudo apt-get update && sudo apt-get install -y clang-format
-          git ls-files '*.h' '*.cpp' | xargs clang-format --dry-run --Werror
+          echo "$VERSION" > "plugins/$SLUG/VERSION"
+          echo "AA_BUILD_SHA=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_ENV"
 
-  repo-checks:
-    name: repo checks (skills in sync, no cross-plugin includes)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - run: scripts/check_repo.sh
+      - name: Plugin metadata
+        id: meta
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, sys
+          sys.path.insert(0, "scripts")
+          from lib.plugin_release import get_plugin
+          p = get_plugin(os.environ["SLUG"])
+          print(f"version={p.version}")
+          print(f"bundle={p.bundle_name}")
+          print(f"bundle_path=build/{p.bundle_build_rel()}")
+          PY
+
+      - uses: ./.github/actions/setup-mac-build
+        with:
+          cache-key: ${{ matrix.plugin }}
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAA_PLUGINS="$SLUG" -DAA_LOCAL_BUILD=OFF
+
+      - name: Build (VST3 + tests)
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel 3
+
+      - name: pluginval (strictness 10)
+        env:
+          BUNDLE: ${{ steps.meta.outputs.bundle_path }}
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/pluginval.zip" https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q "$RUNNER_TEMP/pluginval.zip" -d "$RUNNER_TEMP/pluginval"
+          "$RUNNER_TEMP/pluginval/pluginval.app/Contents/MacOS/pluginval" \
+            --strictness-level 10 --validate-in-process --timeout-ms 120000 "$BUNDLE"
+
+      - name: Install script smoke test
+        env:
+          BUNDLE: ${{ steps.meta.outputs.bundle }}
+        run: |
+          prefix="$RUNNER_TEMP/vst3-install-test"
+          python3 scripts/install_plugins.py --prefix "$prefix" --yes
+          python3 scripts/install_plugins.py --list --prefix "$prefix" | tee "$RUNNER_TEMP/list.txt"
+          grep -q "$BUNDLE" "$RUNNER_TEMP/list.txt"
+          if grep -q "not this checkout's commit" "$RUNNER_TEMP/list.txt"; then echo "installed build stamp does not match HEAD"; exit 1; fi
+          python3 scripts/install_plugins.py --uninstall --prefix "$prefix"
+          test -z "$(ls -A "$prefix")"
+
+      - name: Apple signing
+        if: inputs.release
+        uses: ./.github/actions/apple-signing
+        with:
+          p12-base64: ${{ secrets.AA_DEVELOPER_ID_P12_BASE64 }}
+          p12-password: ${{ secrets.AA_DEVELOPER_ID_P12_PASSWORD }}
+          installer-p12-base64: ${{ secrets.AA_DEVELOPER_ID_INSTALLER_P12_BASE64 }}
+          installer-p12-password: ${{ secrets.AA_DEVELOPER_ID_INSTALLER_P12_PASSWORD }}
+          codesign-identity: ${{ secrets.AA_CODESIGN_IDENTITY }}
+          installer-codesign-identity: ${{ secrets.AA_INSTALLER_CODESIGN_IDENTITY }}
+          notary-p8-base64: ${{ secrets.AA_NOTARY_P8_BASE64 }}
+          notary-key-id: ${{ secrets.AA_NOTARY_KEY_ID }}
+          notary-issuer: ${{ secrets.AA_NOTARY_ISSUER }}
+
+      - name: Sign, notarize and package
+        if: inputs.release
+        env:
+          AA_SKIP_BUILD: "1"
+        run: scripts/release_plugin.sh "$SLUG" --skip-verify --skip-upload
+
+      - name: Upload release artifact
+        if: inputs.release
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.plugin }}
+          path: dist/releases/${{ matrix.plugin }}/${{ steps.meta.outputs.version }}/
+          if-no-files-found: error

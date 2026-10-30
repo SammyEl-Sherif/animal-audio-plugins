@@ -8,7 +8,7 @@ gh secret set SECRET_NAME -R SammyEl-Sherif/animal-audio-plugins
 
 (Paste the real value when prompted; nothing secret belongs in git.)
 
-## Supabase upload (**Release plugin** workflow, mac + win)
+## Supabase upload (**Release** workflow, `publish` jobs)
 
 | Secret | Value |
 | --- | --- |
@@ -16,7 +16,7 @@ gh secret set SECRET_NAME -R SammyEl-Sherif/animal-audio-plugins
 | `AA_SUPABASE_DB_PASSWORD` | Animal Audio project database password (`huivhdradgroykfvtclx`) |
 | `AA_WEB_REPO_GITHUB_TOKEN` | GitHub PAT with **read** on `SammyEl-Sherif/animal-audio-web` (private repo checkout in CI) |
 
-## macOS signing + notarization (**Release plugin**, platform `mac`)
+## macOS signing + notarization (**Release** workflow, plugin build jobs)
 
 | Secret | Value |
 | --- | --- |
@@ -30,4 +30,9 @@ gh secret set SECRET_NAME -R SammyEl-Sherif/animal-audio-plugins
 | `AA_DEVELOPER_ID_INSTALLER_P12_BASE64` | Base64 of exported **Developer ID Installer** `.p12` (cert + private key; `productsign` needs it) |
 | `AA_DEVELOPER_ID_INSTALLER_P12_PASSWORD` | Optional; password for the Installer `.p12` (defaults to `AA_DEVELOPER_ID_P12_PASSWORD`) |
 
-Windows release does not need Apple signing secrets.
+## Tagging (**Release** workflow, `tag` job)
+
+| Secret | Value |
+| --- | --- |
+| `BYPASS_APP_ID` | GitHub App id; the app is a bypass actor on the `main` ruleset so it can push the VERSION bump + tags |
+| `BYPASS_APP_PRIVATE_KEY` | That app's private key (`.pem`) |

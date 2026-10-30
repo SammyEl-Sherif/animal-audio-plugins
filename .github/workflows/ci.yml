@@ -1,0 +1,40 @@
+# Pull request checks. `ci-ok` is the single required status check (it fails if any build/lint job failed).
+name: CI
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  release-plan:
+    name: release plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: What merging this PR releases
+        run: |
+          git fetch --tags --force --quiet origin
+          python3 scripts/plan_release.py --github-output
+
+  ci-ok:
+    if: always()
+    needs: [build, release-plan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All checks passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done

@@ -20,7 +20,7 @@ from pathlib import Path
 
 README_START = "<!-- PLUGINS:START -->"
 README_END = "<!-- PLUGINS:END -->"
-# Anchor in .github/workflows/release-plugin.yml. The choice values are folder slugs.
+# Anchor in .github/workflows/release.yml. The choice values are folder slugs.
 _PLUGIN_SLUG_OPTIONS = re.compile(
     r"^        options: # plugin-slugs\n(?:          - [a-z0-9]+\n)+",
     re.MULTILINE,
@@ -80,7 +80,7 @@ def render(text: str, values: dict[str, str]) -> str:
 
 
 def plugin_slugs_in_release_workflow(text: str) -> list[str]:
-    """Folder slugs in the Release plugin workflow's plugin dropdown."""
+    """Folder slugs in the Release workflow's plugin dropdown."""
     match = _PLUGIN_SLUG_OPTIONS.search(text)
     if not match:
         raise ValueError("release workflow is missing the plugin-slugs choice list")
@@ -88,7 +88,7 @@ def plugin_slugs_in_release_workflow(text: str) -> list[str]:
 
 
 def add_release_workflow_plugin(workflow: Path, slug: str) -> bool:
-    """Insert slug into the Release plugin dropdown, keeping the list sorted.
+    """Insert slug into the Release workflow dropdown, keeping the list sorted.
 
     Returns False when the workflow file is absent or the slug is already listed.
     """
@@ -181,7 +181,7 @@ def main() -> None:
         target.write_text(render(source.read_text(encoding="utf-8"), values), encoding="utf-8")
 
     readme_updated = False if args.no_readme else add_readme_row(root / "README.md", name, folder, description)
-    workflow_updated = add_release_workflow_plugin(root / ".github" / "workflows" / "release-plugin.yml", folder)
+    workflow_updated = add_release_workflow_plugin(root / ".github" / "workflows" / "release.yml", folder)
 
     print(f"Created {destination.relative_to(root)} (target {name}, plugin code {code}, theme hue {hue:g})")
     if readme_updated:
