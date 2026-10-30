@@ -15,7 +15,7 @@ juce::Rectangle<float> disc(juce::Point<float> centre, float radius)
 
 juce::Colour fur(const animalaudio::ui::Palette& palette)
 {
-    return palette.accentAlt.interpolatedWith(palette.background, 0.4f);
+    return palette.accentAlt.interpolatedWith(palette.background, 0.5f);
 }
 
 juce::Colour face(const animalaudio::ui::Palette& palette)
@@ -23,19 +23,9 @@ juce::Colour face(const animalaudio::ui::Palette& palette)
     return palette.text.interpolatedWith(palette.accentAlt, 0.42f);
 }
 
-juce::Colour glint(const animalaudio::ui::Palette& palette)
+juce::Colour firefly(const animalaudio::ui::Palette& palette)
 {
     return palette.accentAlt.interpolatedWith(palette.text, 0.45f);
-}
-
-juce::Colour metalLight(const animalaudio::ui::Palette& palette)
-{
-    return palette.text.interpolatedWith(palette.textDim, 0.45f);
-}
-
-juce::Colour metalDark(const animalaudio::ui::Palette& palette)
-{
-    return palette.panelRaised.darker(0.35f);
 }
 
 float fract(float x)
@@ -104,20 +94,9 @@ void MonkeydyneMotif::drawMascot(juce::Graphics& g, juce::Rectangle<float> area,
     // Outline first: the fill covers the half of the stroke inside, including where ears and tuft overlap.
     g.setColour(palette.background.withAlpha(0.6f));
     g.strokePath(head, juce::PathStrokeType(line * 1.6f));
-    // Polished bronze: a bright crown, the dark band of a reflected horizon, warm light returning at the jaw, and a
-    // specular glint where the light lands.
-    juce::ColourGradient bronze(furColour.brighter(0.9f), at(0.5f, 0.1f).x, at(0.5f, 0.1f).y, furColour.brighter(0.2f),
-                                at(0.5f, 0.9f).x, at(0.5f, 0.9f).y, false);
-    bronze.addColour(0.42, furColour.brighter(0.35f));
-    bronze.addColour(0.58, furColour.darker(0.4f));
-    bronze.addColour(0.76, furColour.darker(0.05f));
-    g.setGradientFill(bronze);
+    g.setGradientFill(juce::ColourGradient(furColour.brighter(0.35f), at(0.5f, 0.15f).x, at(0.5f, 0.15f).y,
+                                           furColour.darker(0.35f), at(0.5f, 0.85f).x, at(0.5f, 0.85f).y, false));
     g.fillPath(head);
-    const auto glintCentre = at(0.37f, 0.27f);
-    g.setGradientFill(juce::ColourGradient(palette.text.withAlpha(0.55f), glintCentre.x, glintCentre.y,
-                                           palette.text.withAlpha(0.0f), glintCentre.x + size * 0.16f, glintCentre.y,
-                                           true));
-    g.fillEllipse(oval(0.37f, 0.27f, 0.32f, 0.18f));
 
     g.setColour(faceColour.darker(0.25f));
     g.fillEllipse(oval(0.175f, 0.505f, 0.15f, 0.15f));
@@ -132,7 +111,7 @@ void MonkeydyneMotif::drawMascot(juce::Graphics& g, juce::Rectangle<float> area,
                                            faceColour.darker(0.12f), at(0.5f, 0.78f).x, at(0.5f, 0.78f).y, false));
     g.fillPath(mask);
 
-    g.setColour(palette.accent.withAlpha(0.35f));
+    g.setColour(palette.accentAlt.withAlpha(0.3f));
     g.fillEllipse(oval(0.31f, 0.60f, 0.08f, 0.05f));
     g.fillEllipse(oval(0.69f, 0.60f, 0.08f, 0.05f));
 
@@ -157,79 +136,45 @@ void MonkeydyneMotif::drawMascot(juce::Graphics& g, juce::Rectangle<float> area,
 void MonkeydyneMotif::drawKnobCap(juce::Graphics& g, juce::Point<float> centre, float radius, float angle,
                                   const animalaudio::ui::Palette& palette) const
 {
-    const auto light = metalLight(palette);
-    const auto dark = metalDark(palette);
-    g.setColour(juce::Colours::black.withAlpha(0.55f));
-    g.fillEllipse(disc(centre, radius).translated(0.0f, radius * 0.1f));
-    // Polished bezel, lit from above.
-    g.setGradientFill(
-        juce::ColourGradient(light, centre.x, centre.y - radius, dark, centre.x, centre.y + radius, false));
-    g.fillEllipse(disc(centre, radius));
-
-    // Spun-metal face: two bright lobes facing the light, the grooves of the lathe.
-    const float faceRadius = radius * 0.84f;
-    const auto face = disc(centre, faceRadius);
-    g.setColour(dark.interpolatedWith(light, 0.25f));
-    g.fillEllipse(face);
-    constexpr int sectors = 40;
-    constexpr float step = 2.0f * kPi / static_cast<float>(sectors);
-    for (int i = 0; i < sectors; ++i)
-    {
-        const float from = static_cast<float>(i) * step;
-        const float shine = 0.5f + 0.5f * std::cos(2.0f * (from + 0.5f * step + 0.55f));
-        juce::Path wedge;
-        wedge.addPieSegment(face, from, from + step * 1.08f, 0.0f);
-        g.setColour(dark.interpolatedWith(light, 0.12f + 0.5f * shine * shine));
-        g.fillPath(wedge);
-    }
-    g.setColour(juce::Colours::black.withAlpha(0.07f));
-    for (float r = faceRadius * 0.3f; r < faceRadius; r += std::max(1.5f, faceRadius * 0.12f))
-        g.drawEllipse(disc(centre, r), 0.5f);
     g.setColour(juce::Colours::black.withAlpha(0.5f));
-    g.drawEllipse(face, std::max(0.6f, radius * 0.04f));
+    g.fillEllipse(disc(centre, radius).translated(0.0f, radius * 0.08f));
+    g.setGradientFill(juce::ColourGradient(palette.panelRaised.brighter(0.3f), centre.x, centre.y - radius,
+                                           palette.background.darker(0.2f), centre.x, centre.y + radius, false));
+    g.fillEllipse(disc(centre, radius));
+    g.setColour(palette.text.withAlpha(0.09f));
+    g.drawEllipse(disc(centre, radius - 0.5f), 1.0f);
 
-    // The pointer is a banana in the knob's colour, its stem at the value, polished like the rest.
+    const float faceRadius = radius * 0.84f;
+    g.setGradientFill(juce::ColourGradient(palette.panelRaised.brighter(0.06f), centre.x, centre.y - faceRadius,
+                                           palette.panel.darker(0.15f), centre.x, centre.y + faceRadius, false));
+    g.fillEllipse(disc(centre, faceRadius));
+
+    // The pointer is a banana in the knob's colour, its stem at the value.
     const float length = faceRadius * 0.95f;
     const auto place = juce::AffineTransform::rotation(angle).translated(centre);
-    const auto across = juce::Point<float>(length * 0.3f, 0.0f).transformedBy(juce::AffineTransform::rotation(angle));
+    const auto tip = juce::Point<float>(0.0f, -length).transformedBy(place);
     const auto banana = makeBanana(length, length * 0.3f);
-    g.setColour(juce::Colours::black.withAlpha(0.45f));
-    g.fillPath(banana, place.translated(0.0f, radius * 0.06f));
-    juce::ColourGradient polish(palette.accent.brighter(0.7f), centre.x + across.x, centre.y + across.y,
-                                palette.accent.darker(0.45f), centre.x - across.x, centre.y - across.y, false);
-    polish.addColour(0.4, palette.accent);
-    g.setGradientFill(polish);
+    g.setGradientFill(juce::ColourGradient(palette.accent.brighter(0.3f), tip.x, tip.y, palette.accent.darker(0.5f),
+                                           centre.x, centre.y, false));
     g.fillPath(banana, place);
-    g.setColour(juce::Colours::black.withAlpha(0.55f));
-    g.strokePath(banana, juce::PathStrokeType(std::max(0.6f, radius * 0.03f)), place);
+    g.setColour(palette.background.withAlpha(0.5f));
+    g.strokePath(banana, juce::PathStrokeType(std::max(0.6f, radius * 0.025f)), place);
 
-    const auto hub = disc(centre, radius * 0.14f);
-    g.setGradientFill(juce::ColourGradient(light, centre.x, hub.getY(), dark, centre.x, hub.getBottom(), false));
-    g.fillEllipse(hub);
-    g.setColour(juce::Colours::black.withAlpha(0.5f));
-    g.drawEllipse(hub, 0.6f);
+    g.setColour(palette.background);
+    g.fillEllipse(disc(centre, radius * 0.13f));
+    g.setColour(palette.text.withAlpha(0.18f));
+    g.drawEllipse(disc(centre, radius * 0.13f), 1.0f);
 }
 
 void MonkeydyneMotif::drawAmbient(juce::Graphics& g, juce::Rectangle<float> area, double timeSeconds,
                                   const animalaudio::ui::Palette& palette) const
 {
-    g.setGradientFill(juce::ColourGradient(palette.panel, 0.0f, area.getY(), palette.ambient, 0.0f,
-                                           area.getY() + area.getHeight() * 0.7f, false));
-    g.fillRect(area);
-    // Light through tinted glass: orchid pooling low on the left, gold high on the right.
-    const float reach = std::max(area.getWidth(), area.getHeight()) * 0.55f;
-    g.setGradientFill(juce::ColourGradient(palette.accent.withAlpha(0.07f), area.getX() + area.getWidth() * 0.12f,
-                                           area.getBottom(), palette.accent.withAlpha(0.0f),
-                                           area.getX() + area.getWidth() * 0.12f + reach, area.getBottom(), true));
-    g.fillRect(area);
-    g.setGradientFill(
-        juce::ColourGradient(palette.accentAlt.withAlpha(0.045f), area.getRight() - area.getWidth() * 0.15f,
-                             area.getY(), palette.accentAlt.withAlpha(0.0f),
-                             area.getRight() - area.getWidth() * 0.15f + reach * 0.8f, area.getY(), true));
+    g.setGradientFill(juce::ColourGradient(palette.ambient.brighter(0.35f), 0.0f, area.getY(), palette.ambient, 0.0f,
+                                           area.getBottom(), false));
     g.fillRect(area);
 
-    // Silver filigree vines hang from the top and sway with the clock the caller passes (the host playhead), so a
-    // still transport is a still jungle. {x, length as a share of the height, phase}
+    // Vines hang from the canopy and sway with the clock the caller passes (the host playhead), so a still
+    // transport is a still jungle. {x, length as a share of the height, phase}
     static constexpr float vines[][3] = {{0.04f, 0.30f, 0.0f}, {0.17f, 0.18f, 1.7f}, {0.31f, 0.38f, 3.1f},
                                          {0.52f, 0.22f, 4.4f}, {0.66f, 0.34f, 0.9f}, {0.83f, 0.16f, 2.6f},
                                          {0.95f, 0.27f, 5.3f}};
@@ -249,11 +194,11 @@ void MonkeydyneMotif::drawAmbient(juce::Graphics& g, juce::Rectangle<float> area
         stem.startNewSubPath(pointAt(0.0f));
         for (int i = 1; i <= 16; ++i)
             stem.lineTo(pointAt(static_cast<float>(i) / 16.0f));
-        g.setColour(palette.textDim.withAlpha(0.09f));
-        g.strokePath(stem, juce::PathStrokeType(1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour(palette.accent.withAlpha(0.07f));
+        g.strokePath(stem, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         const auto leaf = makeLeaf(leafLength);
-        g.setColour(palette.textDim.withAlpha(0.065f));
+        g.setColour(palette.accent.withAlpha(0.055f));
         for (int i = 1; i <= 5; ++i)
         {
             const float u = static_cast<float>(i) / 5.2f;
@@ -263,8 +208,8 @@ void MonkeydyneMotif::drawAmbient(juce::Graphics& g, juce::Rectangle<float> area
         }
     }
 
-    // Gold dust drifts and glints: the brightest specks flash a four-point star.
-    const auto glow = glint(palette);
+    // Fireflies wander and pulse.
+    const auto glow = firefly(palette);
     constexpr int flies = 14;
     for (int i = 0; i < flies; ++i)
     {
@@ -277,15 +222,8 @@ void MonkeydyneMotif::drawAmbient(juce::Graphics& g, juce::Rectangle<float> area
         const float pulse = 0.5f + 0.5f * std::sin(t * 1.3f * speed + seed * 9.0f);
         g.setColour(glow.withAlpha(0.03f * pulse));
         g.fillEllipse(disc({x, y}, 5.5f));
-        g.setColour(glow.withAlpha(0.08f + 0.16f * pulse));
-        g.fillEllipse(disc({x, y}, 1.1f));
-        if (pulse > 0.75f)
-        {
-            const float arm = 2.0f + 10.0f * (pulse - 0.75f);
-            g.setColour(glow.withAlpha(0.5f * (pulse - 0.75f)));
-            g.fillRect(x - arm, y - 0.35f, arm * 2.0f, 0.7f);
-            g.fillRect(x - 0.35f, y - arm, 0.7f, arm * 2.0f);
-        }
+        g.setColour(glow.withAlpha(0.08f + 0.14f * pulse));
+        g.fillEllipse(disc({x, y}, 1.2f));
     }
 }
 
@@ -297,7 +235,7 @@ void MonkeydyneMotif::drawDecoration(juce::Graphics& g, juce::Rectangle<float> p
                                           {0.90f, 0.18f, 6.0f, 2.4f},
                                           {0.94f, 0.30f, 4.0f, 1.2f},
                                           {0.55f, 0.88f, 5.0f, -2.2f}};
-    g.setColour(palette.textDim.withAlpha(0.08f));
+    g.setColour(palette.accent.withAlpha(0.07f));
     for (const auto& leaf : leaves)
     {
         const auto c = juce::Point<float>(panelArea.getX() + panelArea.getWidth() * leaf[0],

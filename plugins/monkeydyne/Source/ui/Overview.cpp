@@ -1,7 +1,5 @@
 #include "Overview.h"
 
-#include "Glass.h"
-
 #include <algorithm>
 
 namespace monkeydyne::ui
@@ -51,7 +49,10 @@ void Overview::paint(juce::Graphics& g)
 {
     const auto& palette = theme.palette;
     const auto bounds = getLocalBounds().toFloat();
-    drawGlassWell(g, bounds, 7.0f, palette);
+    g.setColour(palette.panel.darker(0.2f));
+    g.fillRoundedRectangle(bounds, 6.0f);
+    g.setColour(palette.outline);
+    g.drawRoundedRectangle(bounds.reduced(0.5f), 6.0f, 1.0f);
 
     const float mid = bounds.getCentreY();
     const float half = bounds.getHeight() * 0.36f;
@@ -90,10 +91,10 @@ void Overview::paint(juce::Graphics& g)
     const float v1 = xFor(canvas.getViewStart() + canvas.getVisibleSeconds());
     const auto window =
         juce::Rectangle<float>(v0, bounds.getY() + 1.5f, std::max(4.0f, v1 - v0), bounds.getHeight() - 3.0f);
-    g.setGradientFill(juce::ColourGradient(palette.text.withAlpha(0.16f), 0.0f, window.getY(),
-                                           palette.text.withAlpha(0.04f), 0.0f, window.getBottom(), false));
+    g.setColour(palette.text.withAlpha(0.07f));
     g.fillRoundedRectangle(window, 4.0f);
-    drawBevel(g, window, 4.0f, palette, true);
+    g.setColour(palette.text.withAlpha(0.45f));
+    g.drawRoundedRectangle(window, 4.0f, 1.0f);
 
     g.setColour(palette.text.withAlpha(0.7f));
     g.fillRect(xFor(playhead) - 0.5f, bounds.getY() + 3.0f, 1.0f, bounds.getHeight() - 6.0f);

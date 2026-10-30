@@ -97,9 +97,9 @@ plugins/monkeydyne/   note-based vocal editor (own processor, worker thread and 
                       merge, link, reset), Renderer (offline TD-PSOLA), SegmentCache, Capture, Playback
   Source/engine/      Session (takes + notes + scale + undo), Worker (thread: capture chunks, analysis, renders),
                       StateCodec (MKD1 + XML + 24-bit FLAC per take)
-  Source/ui/          MonkeydyneTheme (kThemeHue 306), MonkeydyneMotif (bronze monkey head, banana knob pointer,
-                      vines, gold dust), Glass (brushed metal, glass panels / wells / buttons, chrome text),
-                      EditController (selection, gestures, undo), NoteCanvas (piano roll), Inspector, Overview
+  Source/ui/          MonkeydyneTheme (kThemeHue 186), MonkeydyneMotif (monkey head, banana knob pointer, vines,
+                      fireflies), EditController (selection, gestures, undo), NoteCanvas (piano roll), Inspector,
+                      Overview
   tests/              MonkeydyneTests (processor), MonkeydyneDspTests, MonkeydyneEditorTests;
                       MonkeydyneHost.h / MonkeydyneTestSupport.h
 templates/plugin/     starter copied by scripts/new_plugin.py (placeholders __NAME__, __NAME_LOWER__, __HUE__, ...)
@@ -367,10 +367,8 @@ elsewhere and during capture). Stopped, clicking a note auditions it. A take pla
   `Overview` strip; the `Inspector` (NOTES: PITCH / SNAP / STRAIGHTEN / VIBRATO, SOUND: FORMANT / GAIN, GLIDE:
   GLIDE / CURVE, SCALE, OUTPUT: MIX / COMPARE). PITCH, FORMANT and GAIN knobs are relative (each note keeps its
   offset); the others set absolute values. Editor tests use synthetic component events only.
-- Look: titanium and glass (`Source/ui/Glass.h`): a brushed-metal backdrop, frosted glass panels and buttons
-  (`GlassButton`), notes as tinted glass, chrome title lettering, spun-metal knob caps. Colours: graphite with an
-  orchid pearl accent for notes (`kThemeHue` 306); champagne gold (`accentAlt`) marks the selection and glides
-  (darkened, it is the monkey's bronze), mint (`detail`) the formant.
+- Palette: teal-black jungle night with an aqua accent for notes (`kThemeHue` 186); coral (`accentAlt`) marks the
+  selection and glides (darkened, it is the monkey's fur), violet (`detail`) the formant.
 - Limits: monophonic; takes are tied to song time (moving the clip or changing tempo needs a new transfer); pYIN,
   not a neural tracker.
 

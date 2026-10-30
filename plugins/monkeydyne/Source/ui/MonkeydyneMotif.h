@@ -8,8 +8,8 @@ namespace monkeydyne::ui
 juce::Path makeBanana(float length, float bow);
 
 /**
- * The monkey in polished bronze: a round head with big ears, a heart-shaped face, a hair tuft and a grin; a banana
- * as the pointer on a spun-metal knob cap; silver filigree vines and glinting gold dust behind the notes.
+ * The monkey: a round head with big ears, a heart-shaped face, a hair tuft and a grin; a banana as the knob pointer;
+ * vines swaying from the canopy and fireflies drifting as the screen background.
  */
 class MonkeydyneMotif : public animalaudio::ui::Motif
 {
