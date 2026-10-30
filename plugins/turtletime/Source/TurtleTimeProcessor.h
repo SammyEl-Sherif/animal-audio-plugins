@@ -10,6 +10,7 @@ namespace ids
 {
 inline const juce::ParameterID pattern{"pattern", 1};
 inline const juce::ParameterID mix{"mix", 1};
+inline const juce::ParameterID keepPitch{"keepPitch", 1};
 } // namespace ids
 
 class TurtleTimeProcessor : public juce::AudioProcessor
@@ -53,6 +54,7 @@ private:
     dsp::TurtleTimeEngine engine;
     std::atomic<float>* patternParam = nullptr;
     std::atomic<float>* mixParam = nullptr;
+    std::atomic<float>* keepPitchParam = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TurtleTimeProcessor)
 };

@@ -25,7 +25,7 @@ New plugins: use the **`/vst <name or idea>`** skill (see [Creating a plugin wit
 | 2. Make the plugin | contributor | **`/vst <name or idea>`**: scaffold, DSP, Theme + Motif, tests, pluginval, local install, docs, release-readiness check |
 | 3. PR to `main` | contributor | branch `feat/<slug>-plugin` (fork if no write access); CI green on Linux/macOS/Windows; PR ends with a "Site listing" block |
 | 4. Review + merge | maintainer | DRY/branding/realtime review against this file |
-| 5. Release | maintainer | **`/release <slug>`**: Release plugin workflow (Mac notarized `.pkg`, Windows zip) → Supabase upload + `plugin_releases` row → GitHub Release `<slug>-vX.Y.Z` |
+| 5. Release | CI / maintainer | Automatic on merge when `plugins/<slug>/VERSION` has no tag yet (`auto-release.yml`, after Build is green); else **`/release <slug>`**. Release plugin workflow (Mac notarized `.pkg`, Windows zip) → Supabase upload + `plugin_releases` row → GitHub Release `<slug>-vX.Y.Z` |
 | 6. List on the site | maintainer | `/release` step 3: catalog PR in **animal-audio-web** (`packages/catalog`, landing data, accent) |
 
 Contributors never need Apple or Supabase credentials and never edit release scripts for their plugin. Skills:
@@ -67,7 +67,7 @@ plugins/duck/         only what is Duck-specific:
   tests/              DuckTests.cpp = the two shared suite macros
 plugins/turtletime/  half-time / time warp (own processor, not the curve shaper):
   Source/             TurtleTimeProcessor, TurtleTimeEditor
-  Source/dsp/         TurtleTimeEngine (circular-buffer resample, 4-point cubic), TimePatterns
+  Source/dsp/         TurtleTimeEngine (circular-buffer resample, 4-point cubic, keep-pitch grains), TimePatterns
   Source/ui/          TurtleTimeTheme (kThemeHue 147), TurtleTimeMotif (hex-shell mark, machined knob cap),
                       TurtleTimeWidgets (TurtleKnob, PatternCell)
   tests/              TurtleTimeTests.cpp
@@ -168,7 +168,8 @@ cmake -S . -B build && scripts/verify_plugin.sh Wobble
 
 The script copies `templates/plugin` to `plugins/wobble`, substitutes the placeholders, picks a unique
 4-char plugin code (manufacturer code is always `AnAu`) and a theme hue far from every other plugin's
-`kThemeHue`, and adds a row to the README plugin table. The result is a **green scaffold**: `GainShaperProcessor` + `ShaperEditor` + `Theme` (Duck's curve-shaper stack)
+`kThemeHue`, adds a row to the README plugin table, and adds the slug to the Release plugin
+workflow dropdown. The result is a **green scaffold**: `GainShaperProcessor` + `ShaperEditor` + `Theme` (Duck's curve-shaper stack)
 and the standard shaper test suites. New plugins are not required to keep that layout—swap editor and/or
 processor when the concept needs it; keep Animal Audio branding (`BrandBadge`, palette, Motif).
 
@@ -260,16 +261,24 @@ are original.
   playhead; playback resumes with a snap. There is no user BPM control. History is allocated in `prepare`
   (32 seconds); `process` does not allocate. Input/output peaks per window phase go to the UI through two
   `dsp::CycleScope`s (frozen while stopped).
-- Parameters (APVTS, version 1): `pattern` (32 choices, default `Half 1 Bar`), `mix` (default 100%).
-  Host programs mirror the pattern list. Mix moves are smoothed (15 ms).
+- Keep pitch (`keepPitch` on, only for slowed patterns, `dsp::slowsDown(rate)`: HALF and SLOW): the read head becomes
+  two periodic-Hann grains (40 ms, 50% overlap, sum = 1) read at 1x whose start points follow the slow position, so time
+  stretches and pitch stays. Each new grain start is nudged within ±10 ms (never past the write head) to where its
+  recent past best matches the grain it overlaps (normalised cross-correlation, coarse/fine search), so tones stay in
+  phase: level is flat from 50 Hz up, about ±12% wobble at 30 Hz. Window jumps and toggling crossfade like any jump.
+  Tape mode (off) is unchanged. Costs about 0.5% of a core at 48 kHz stereo; tested in `TurtleTimeTests` ("keep pitch").
+- Parameters (APVTS, version 1): `pattern` (32 choices, default `Half 1 Bar`), `mix` (default 100%), `keepPitch`
+  (bool, default off = tape-style pitch drop). Host programs mirror the pattern list. Mix moves are smoothed (15 ms).
 - Patterns are a 4×8 matrix, index = row * 8 + column. Rows: HALF (0.5x), SLOW (0.25x), REVERSE (-1x),
   REPEAT (slice loop). Columns are the same musical lengths in every row: 1/32, 1/16, 1/8, 1/4, 3/8, 1/2,
   1 bar, 2 bars (for REPEAT that is the slice; it loops across a bar, or twice its length from 1 bar up).
   Program names are `Half 1/4`, `Reverse 1 Bar`, …
 - UI (`TurtleTimeEditor`, 940×528): header (hex-shell mark, TURTLE TIME / TIME WARP, brand badge); a recessed
   display with the input (grey) and output (green) envelopes over the current window, beat grid, white NOW
-  line and amber READ head; a MIX panel (ticked knob, % readout, PLAYING/STOPPED + host BPM); the pattern
-  matrix with row labels and rectangular cells. Motion comes from the host playhead, not a wall clock.
+  line and amber READ head, readout `HALF · 0.5X SPEED · 1 OCTAVE DOWN` / `· PITCH KEPT` (`dsp::pitchLabel`); a MIX
+  panel (ticked knob, % readout, PITCH DROP/KEEP segments, dimmed for 1x patterns, PLAYING/STOPPED + host BPM); the
+  pattern matrix with row labels and rectangular cells. Motion comes from the host playhead, not a wall clock.
+  Pattern blurbs do not mention pitch (it depends on the toggle).
 - Palette: graphite with a mint-green accent (`kThemeHue` 147°); amber only for the read head. Product name in
   hosts: "Turtle Time"; VST3 bundle: `TurtleTime.vst3`.
 

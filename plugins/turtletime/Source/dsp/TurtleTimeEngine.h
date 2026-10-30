@@ -18,6 +18,11 @@ namespace turtletime::dsp
  * crossfade hides the jump. The window locks to host PPQ while the transport is playing. Stopped,
  * the input is passed dry (the buffer still records) and the UI phase parks on the host playhead.
  * Playback resumes with a snap. Memory is allocated only in prepare().
+ *
+ * Keep pitch: slowed-down patterns are read as two Hann grains played at 1x, half a grain apart, whose
+ * start points follow the slow read position (overlap-add time stretch). Each new grain start is nudged
+ * to the offset whose recent past best matches the grain it overlaps, so steady tones add in phase.
+ * Grains never read past the write head.
  */
 class TurtleTimeEngine
 {
@@ -31,11 +36,14 @@ public:
 
     void setPatternIndex(int index) noexcept;
     void setMix(float newMix) noexcept;
+    /** Slowed-down patterns keep the original pitch instead of dropping it. Switching crossfades. */
+    void setKeepPitch(bool shouldKeepPitch) noexcept;
 
     void process(float* const* channels, int numChannels, int numSamples,
                  const animalaudio::dsp::TransportInfo& transport) noexcept;
 
     int getPatternIndex() const noexcept { return patternIndex; }
+    bool getKeepPitch() const noexcept { return keepPitch; }
     float getPlayheadPhase() const noexcept { return playheadPhase.load(std::memory_order_relaxed); }
     float getReadMarker() const noexcept { return readMarker.load(std::memory_order_relaxed); }
     bool isHostSynced() const noexcept { return hostSynced.load(std::memory_order_relaxed) != 0; }
@@ -46,21 +54,41 @@ public:
     const Scope& getOutputScope() const noexcept { return outputScope; }
 
 private:
-    void startFade(double fromPosition, float fromRate, int span) noexcept;
+    /** One read head: interpolated reads at `rate` (tape), or two grains that follow `position` (keep pitch). */
+    struct Reader
+    {
+        double position = 0.0;
+        float rate = 1.0f;
+        bool grains = false;
+        int grainStart[2]{};
+        int grainAge[2]{};
+    };
+
+    void startReader(Reader& reader, double position, float rate) noexcept;
+    float readSample(const Reader& reader, int channel) const noexcept;
+    void advance(Reader& reader) noexcept;
+    int alignedGrainStart(const Reader& reader, int otherGrain) const noexcept;
+    float monoAt(int index) const noexcept;
+    void startFade(int span) noexcept;
     float readCubic(int channel, double position) const noexcept;
     int fadeSamplesFor(const TimePattern& pattern, double bpm) const noexcept;
 
     std::vector<float> buffer;
     int capacity = 0;
     int writeIndex = 0;
+    int channelsInUse = 1;
 
-    double readPos = 0.0;
-    float activeRate = 1.0f;
-
-    double fadeReadPos = 0.0;
-    float fadeRate = 1.0f;
+    Reader reader;
+    Reader fadeReader;
     int fadeRemaining = 0;
     int fadeSpanSamples = 1;
+
+    std::vector<float> grainWindow; // periodic Hann: the two half-offset grains sum to exactly 1
+    int grainLength = 2;
+    int alignSearch = 0;  // max grain-start nudge, samples each way
+    int alignContext = 1; // samples of recent past compared when aligning
+    bool keepPitch = false;
+    bool keepPitchDirty = false;
 
     int lastWindow = 0;
     int lastSlice = -1;

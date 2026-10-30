@@ -28,6 +28,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                          { return juce::String(juce::roundToInt(value * 100.0f)) + " %"; })
             .withValueFromStringFunction([](const juce::String& text) { return text.getFloatValue() * 0.01f; })));
 
+    layout.add(std::make_unique<juce::AudioParameterBool>(ids::keepPitch, "Keep Pitch", false));
+
     return layout;
 }
 } // namespace
@@ -40,6 +42,7 @@ TurtleTimeProcessor::TurtleTimeProcessor()
 {
     patternParam = apvts.getRawParameterValue(ids::pattern.getParamID());
     mixParam = apvts.getRawParameterValue(ids::mix.getParamID());
+    keepPitchParam = apvts.getRawParameterValue(ids::keepPitch.getParamID());
 }
 
 bool TurtleTimeProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -54,6 +57,7 @@ void TurtleTimeProcessor::pushParameters() noexcept
 {
     engine.setPatternIndex(juce::roundToInt(patternParam->load()));
     engine.setMix(mixParam->load());
+    engine.setKeepPitch(keepPitchParam->load() >= 0.5f);
 }
 
 void TurtleTimeProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
