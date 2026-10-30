@@ -81,9 +81,14 @@ Open this table and decide, for every piece the concept needs, whether it alread
 | standard params (division, mix, fallbackBpm), state save/restore, phase/transport plumbing | `core/CurveShaperProcessor.h` (`GainShaperProcessor` for gain effects) |
 | 16 stock curve shapes | `dsp/StandardPresets.h` (you supply names) |
 | curve-shaper editor (optional) | `ui/ShaperEditor.h` + `ui/Theme.h` — use when the UX matches Duck; otherwise a custom editor |
-| branding + look | `BrandBadge`, `Theme` (`Palette` + `Motif`), `makePaletteFromHue`, `makeFont` |
+| branding + look | `BrandBadge`, `Theme` (`Palette` + `Motif`), `makePaletteFromHue`, `makeFont` (with kerning) |
 | widgets (mix and match) | `PillButton`, `ChoicePillRow`, `RotaryKnob`/`ThemedKnob`, `CurveEditor`, `CurvePresetPanel`, `Drawing.h` |
+| monophonic pitch detection (voice, bass, lead) | `dsp/PitchTracker.h` (YIN, ~2.7 ms hop) |
+| band-limited fractional reads / resampling, FIR design | `dsp/WindowedSinc.h` `SincReader`, `designLowpass` |
+| 4x oversampling for nonlinear stages | `dsp/Oversampler.h` `Oversampler4x` |
+| tube saturation / drive | `dsp/TubeDrive.h` (two 12AX7 stages, level-matched, clean at 0) |
 | test suites | `shared/testing`: `AA_SHAPER_PLUGIN_TESTS`, `AA_GAIN_SHAPER_PLUGIN_TESTS` |
+| numeric DSP test helpers (tone amplitude, peak frequency, cents) | `shared/testing`: `SignalProbe.h` |
 
 Skim the headers (`ls shared/*/include/animalaudio/*`) rather than trusting this table; it can be stale.
 If your effect needs something the base class does not offer (another parameter, a different DSP,
