@@ -61,8 +61,11 @@ Invoke-Step "package zip" {
     & (Join-Path $PSScriptRoot "package_win_plugin.ps1") -Plugin $Plugin
 }
 
-$artifact = Join-Path $RepoRoot ($meta.dist -replace '/', '\') $meta.zip
-$manifest = Join-Path ($meta.dist -replace '/', '\') "manifest-win.json"
+# release_root() is already absolute. Join-Path does not drop an absolute child, so
+# prefixing $RepoRoot produced D:\repo\D:\repo\dist\... and the zip check failed.
+$distDir = $meta.dist -replace '/', '\'
+$artifact = Join-Path $distDir $meta.zip
+$manifest = Join-Path $distDir "manifest-win.json"
 if (-not (Test-Path $artifact)) {
     throw "Release zip not found: $artifact"
 }
