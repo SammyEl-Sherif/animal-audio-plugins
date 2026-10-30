@@ -50,9 +50,10 @@ inline Palette makePaletteFromHue(float hueDegrees)
     return p;
 }
 
-/** Bold UI font; falls back to the platform default sans-serif. */
-inline juce::Font makeFont(float height, bool bold = true)
+/** Bold UI font; falls back to the platform default sans-serif. `kerning` adds letter spacing (0.2 = 20%). */
+inline juce::Font makeFont(float height, bool bold = true, float kerning = 0.0f)
 {
-    return juce::Font(juce::FontOptions(height, bold ? juce::Font::bold : juce::Font::plain));
+    return juce::Font(
+        juce::FontOptions(height, bold ? juce::Font::bold : juce::Font::plain).withKerningFactor(kerning));
 }
 } // namespace animalaudio::ui
