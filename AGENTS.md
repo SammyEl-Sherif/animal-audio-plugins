@@ -24,7 +24,7 @@ New plugins: use the **`/vst <name or idea>`** skill (see [Creating a plugin wit
 | 2. Make the plugin | contributor | **`/vst <name or idea>`**: scaffold, DSP, Theme + Motif, tests, pluginval, local install, docs, release-readiness check |
 | 3. PR to `main` | contributor | branch `feat/<slug>-plugin` (fork if no write access); CI green on Linux/macOS/Windows; PR ends with a "Site listing" block |
 | 4. Review + merge | maintainer | DRY/branding/realtime review against this file |
-| 5. Release | maintainer | **`/release <slug>`**: Release plugin workflow (Mac notarized `.pkg`, Windows zip) → Supabase upload + `plugin_releases` row → GitHub Release `<slug>-vX.Y.Z` |
+| 5. Release | CI / maintainer | Automatic on merge when `plugins/<slug>/VERSION` has no tag yet (`auto-release.yml`, after Build is green); else **`/release <slug>`**. Release plugin workflow (Mac notarized `.pkg`, Windows zip) → Supabase upload + `plugin_releases` row → GitHub Release `<slug>-vX.Y.Z` |
 | 6. List on the site | maintainer | `/release` step 3: catalog PR in **animal-audio-web** (`packages/catalog`, landing data, accent) |
 
 Contributors never need Apple or Supabase credentials and never edit release scripts for their plugin. Skills:

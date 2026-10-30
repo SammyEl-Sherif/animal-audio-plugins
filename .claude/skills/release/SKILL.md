@@ -22,7 +22,7 @@ Supabase credentials; if the user lacks access, stop and say who has to run it.
 git fetch origin && git checkout main && git pull --ff-only
 python3 -c "import sys; sys.path.insert(0,'scripts'); from lib.plugin_release import get_plugin as g; p=g('<slug>'); print(p.slug, p.version, p.product_name, p.display_name, p.bundle_name, p.github_tag)"
 gh run list --workflow build.yml --branch main --limit 1     # latest main build must be green
-gh release view <slug>-v<version> >/dev/null 2>&1 && echo "TAG EXISTS"   # must not exist unless you are re-running
+gh release view <slug>-v<version> >/dev/null 2>&1 && echo "TAG EXISTS"   # exists if auto-release shipped it: go to step 2
 ```
 
 - The plugin is merged on `main` (`plugins/<slug>/` with `VERSION`, `CMakeLists.txt` `PRODUCT_NAME` PascalCase, no spaces).
@@ -33,6 +33,10 @@ gh release view <slug>-v<version> >/dev/null 2>&1 && echo "TAG EXISTS"   # must 
   parameter ID, plugin code, or ValueTree identifier was renamed.
 
 ## 1. Run the release workflow (Mac, then Windows)
+
+Usually already done: when Build goes green on `main`, `auto-release.yml` runs both platforms for every plugin whose
+`<slug>-v<version>` tag does not exist yet. Check `gh run list --workflow auto-release.yml --limit 3` first; if it
+succeeded for this version skip to step 2, if one platform failed re-run just that one with the command below.
 
 ```bash
 gh workflow run release-plugin.yml -f plugin=<slug> -f platform=mac -f upload=true -f publish_github_release=true
