@@ -9,6 +9,12 @@ namespace
 {
 // Reverse reads up to two windows back and Repeat 2 Bar up to four bars, so this covers 2-bar reverse at 30 BPM.
 constexpr double kHistorySeconds = 32.0;
+// Long enough for low notes to survive the grain window, short enough that drums do not smear into echoes.
+constexpr double kGrainSeconds = 0.040;
+constexpr double kAlignSearchSeconds = 0.010;
+constexpr double kAlignContextSeconds = 0.008;
+constexpr int kAlignCoarseStep = 3;
+constexpr double kTwoPi = 6.283185307179586;
 
 double wrapPosition(double position, double size) noexcept
 {
@@ -74,6 +80,15 @@ void TurtleTimeEngine::prepare(double newSampleRate, int)
     capacity = std::max(16, static_cast<int>(std::ceil(sampleRate * kHistorySeconds)));
     buffer.assign(static_cast<std::size_t>(kMaxChannels * capacity), 0.0f);
     crossfadeSamples = std::max(1, static_cast<int>(std::lround(sampleRate * 0.010)));
+
+    grainLength = 2 * std::max(1, static_cast<int>(std::lround(sampleRate * kGrainSeconds * 0.5)));
+    grainWindow.resize(static_cast<std::size_t>(grainLength));
+    for (int i = 0; i < grainLength; ++i)
+        grainWindow[static_cast<std::size_t>(i)] =
+            static_cast<float>(0.5 - 0.5 * std::cos(kTwoPi * static_cast<double>(i) / grainLength));
+    alignSearch = static_cast<int>(std::lround(sampleRate * kAlignSearchSeconds));
+    alignContext = std::max(1, static_cast<int>(std::lround(sampleRate * kAlignContextSeconds)));
+
     mixSmoother.prepare(sampleRate, 15.0);
     mixSmoother.reset(mix);
     reset();
@@ -83,12 +98,12 @@ void TurtleTimeEngine::reset() noexcept
 {
     std::fill(buffer.begin(), buffer.end(), 0.0f);
     writeIndex = 0;
-    readPos = 0.0;
-    activeRate = patternAt(patternIndex).rate;
-    fadeReadPos = 0.0;
-    fadeRate = activeRate;
+    reader = Reader{};
+    reader.rate = patternAt(patternIndex).rate;
+    fadeReader = reader;
     fadeRemaining = 0;
     fadeSpanSamples = 1;
+    keepPitchDirty = false;
     lastWindow = 0;
     lastSlice = -1;
     anchorPos = 0.0;
@@ -121,12 +136,133 @@ void TurtleTimeEngine::setMix(float newMix) noexcept
     mixSmoother.setTarget(mix);
 }
 
-void TurtleTimeEngine::startFade(double fromPosition, float fromRate, int span) noexcept
+void TurtleTimeEngine::setKeepPitch(bool shouldKeepPitch) noexcept
 {
-    fadeReadPos = fromPosition;
-    fadeRate = fromRate;
+    if (shouldKeepPitch != keepPitch)
+    {
+        keepPitch = shouldKeepPitch;
+        keepPitchDirty = true;
+    }
+}
+
+void TurtleTimeEngine::startFade(int span) noexcept
+{
+    fadeReader = reader;
     fadeSpanSamples = std::max(1, span);
     fadeRemaining = fadeSpanSamples;
+}
+
+void TurtleTimeEngine::startReader(Reader& target, double position, float rate) noexcept
+{
+    target.position = wrapPosition(position, static_cast<double>(capacity));
+    target.rate = rate;
+    target.grains = keepPitch && slowsDown(rate);
+    if (!target.grains)
+        return;
+
+    // Both grains begin reading at `position`; their windows sum to 1, so the start is plain 1x playback.
+    const int start = wrapIndex(static_cast<int>(std::floor(target.position)), capacity);
+    const int half = grainLength / 2;
+    target.grainStart[0] = start;
+    target.grainAge[0] = 0;
+    target.grainStart[1] = wrapIndex(start - half, capacity);
+    target.grainAge[1] = half;
+}
+
+float TurtleTimeEngine::readSample(const Reader& source, int channel) const noexcept
+{
+    if (!source.grains)
+        return readCubic(channel, source.position);
+
+    const std::size_t base = static_cast<std::size_t>(channel) * static_cast<std::size_t>(capacity);
+    float sum = 0.0f;
+    for (int grain = 0; grain < 2; ++grain)
+    {
+        const int age = source.grainAge[grain];
+        const int index = wrapIndex(source.grainStart[grain] + age, capacity);
+        sum += grainWindow[static_cast<std::size_t>(age)] * buffer[base + static_cast<std::size_t>(index)];
+    }
+    return sum;
+}
+
+void TurtleTimeEngine::advance(Reader& target) noexcept
+{
+    target.position = wrapPosition(target.position + static_cast<double>(target.rate), static_cast<double>(capacity));
+    if (!target.grains)
+        return;
+
+    ++target.grainAge[0];
+    ++target.grainAge[1];
+    for (int grain = 0; grain < 2; ++grain)
+    {
+        if (target.grainAge[grain] < grainLength)
+            continue;
+        target.grainAge[grain] = 0;
+        target.grainStart[grain] = alignedGrainStart(target, 1 - grain);
+    }
+}
+
+float TurtleTimeEngine::monoAt(int index) const noexcept
+{
+    const auto i = static_cast<std::size_t>(wrapIndex(index, capacity));
+    float sum = buffer[i];
+    if (channelsInUse > 1)
+        sum += buffer[static_cast<std::size_t>(capacity) + i];
+    return sum;
+}
+
+int TurtleTimeEngine::alignedGrainStart(const Reader& source, int otherGrain) const noexcept
+{
+    const int nominal = static_cast<int>(std::floor(source.position));
+    if (alignSearch <= 0)
+        return wrapIndex(nominal, capacity);
+
+    // Called after writeIndex moved on: the next input sample lands there before this grain's first read,
+    // and its read k samples later meets the write head k samples later. Starting later would read the future.
+    int ahead = wrapIndex(writeIndex - nominal, capacity);
+    if (ahead > capacity / 2)
+        ahead = 0;
+    const int earliest = -alignSearch;
+    const int latest = std::min(alignSearch, ahead);
+    const int continuation = source.grainStart[otherGrain] + source.grainAge[otherGrain];
+
+    // Compare the recent past of each candidate start with the past of what the other grain reads next
+    // (every second sample). Normalising by the candidate's energy keeps loud passages from winning.
+    const auto score = [this, nominal, continuation](int shift) noexcept
+    {
+        const int candidate = nominal + shift;
+        float cross = 0.0f;
+        float energy = 1.0e-12f;
+        for (int k = 1; k <= alignContext; k += 2)
+        {
+            const float a = monoAt(candidate - k);
+            cross += a * monoAt(continuation - k);
+            energy += a * a;
+        }
+        return cross / std::sqrt(energy);
+    };
+
+    int best = 0;
+    float bestScore = score(0);
+    for (int shift = earliest; shift <= latest; shift += kAlignCoarseStep)
+        if (shift != 0)
+            if (const float s = score(shift); s > bestScore)
+            {
+                bestScore = s;
+                best = shift;
+            }
+
+    const int coarse = best;
+    for (int shift = std::max(earliest, coarse - kAlignCoarseStep + 1);
+         shift <= std::min(latest, coarse + kAlignCoarseStep - 1); ++shift)
+        if (shift != coarse)
+            if (const float s = score(shift); s > bestScore)
+            {
+                bestScore = s;
+                best = shift;
+            }
+
+    return wrapIndex(nominal + best, capacity);
 }
 
 int TurtleTimeEngine::fadeSamplesFor(const TimePattern& pattern, double bpm) const noexcept
@@ -159,6 +295,7 @@ void TurtleTimeEngine::process(float* const* channels, int numChannels, int numS
         return;
 
     const int count = std::min(numChannels, kMaxChannels);
+    channelsInUse = count;
     const TimePattern pattern = patternAt(patternIndex);
     const bool host = transport.playing && transport.hasPpq && std::isfinite(transport.ppq);
     hostSynced.store(host ? 1 : 0, std::memory_order_relaxed);
@@ -224,11 +361,12 @@ void TurtleTimeEngine::process(float* const* channels, int numChannels, int numS
             sliceIndex = static_cast<int>(std::floor(into / pattern.sliceBeats));
 
         const bool newSlice = pattern.mode == TimeMode::Repeat && !newWindow && sliceIndex != lastSlice;
+        const bool restyle = keepPitchDirty && primed && !newWindow && !newSlice &&
+                             (keepPitch && slowsDown(reader.rate)) != reader.grains;
+        keepPitchDirty = false;
 
-        if (newWindow && primed)
-            startFade(readPos, activeRate, fadeSpan);
-        else if (newSlice)
-            startFade(readPos, activeRate, fadeSpan);
+        if ((newWindow && primed) || newSlice || restyle)
+            startFade(fadeSpan);
 
         for (int ch = 0; ch < count; ++ch)
             buffer[static_cast<std::size_t>(ch * capacity + writeIndex)] = channels[ch][sample];
@@ -237,17 +375,20 @@ void TurtleTimeEngine::process(float* const* channels, int numChannels, int numS
         {
             if (pattern.mode == TimeMode::Repeat)
                 anchorPos = static_cast<double>(writeIndex);
-            readPos = pattern.mode == TimeMode::Repeat ? anchorPos : static_cast<double>(writeIndex);
-            activeRate = pattern.rate;
+            startReader(reader, pattern.mode == TimeMode::Repeat ? anchorPos : static_cast<double>(writeIndex),
+                        pattern.rate);
             lastSlice = sliceIndex;
             patternDirty = false;
             primed = true;
         }
         else if (newSlice)
         {
-            readPos = anchorPos;
-            activeRate = pattern.rate;
+            startReader(reader, anchorPos, pattern.rate);
             lastSlice = sliceIndex;
+        }
+        else if (restyle)
+        {
+            startReader(reader, reader.position, reader.rate);
         }
 
         lastWindow = window;
@@ -261,9 +402,9 @@ void TurtleTimeEngine::process(float* const* channels, int numChannels, int numS
         float outPeak = 0.0f;
         for (int ch = 0; ch < count; ++ch)
         {
-            float wet = readCubic(ch, readPos);
+            float wet = readSample(reader, ch);
             if (fading)
-                wet = readCubic(ch, fadeReadPos) * (1.0f - fadeT) + wet * fadeT;
+                wet = readSample(fadeReader, ch) * (1.0f - fadeT) + wet * fadeT;
 
             const float dry = channels[ch][sample];
             const float out = dry + (wet - dry) * mixNow;
@@ -273,10 +414,10 @@ void TurtleTimeEngine::process(float* const* channels, int numChannels, int numS
         }
 
         writeIndex = wrapIndex(writeIndex + 1, capacity);
-        readPos = wrapPosition(readPos + static_cast<double>(activeRate), static_cast<double>(capacity));
+        advance(reader);
         if (fading)
         {
-            fadeReadPos = wrapPosition(fadeReadPos + static_cast<double>(fadeRate), static_cast<double>(capacity));
+            advance(fadeReader);
             --fadeRemaining;
         }
 

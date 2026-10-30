@@ -22,6 +22,30 @@ constexpr float kRowLabelW = 116.0f;
 constexpr float kRowH = 28.0f;
 constexpr float kCellGap = 6.0f;
 
+// MIX panel, top to bottom (offsets from kControls' top).
+constexpr float kKnobTop = 28.0f;
+constexpr float kKnobSize = 108.0f;
+constexpr float kMixValueTop = 134.0f;
+constexpr float kPitchDividerTop = 166.0f;
+constexpr float kPitchRowTop = 175.0f;
+constexpr float kPitchRowH = 26.0f;
+constexpr float kStatusDividerTop = 210.0f;
+constexpr float kPitchLabelW = 58.0f;
+
+juce::Rectangle<float> pitchRow()
+{
+    return {kControls.getX() + 14.0f, kControls.getY() + kPitchRowTop, kControls.getWidth() - 28.0f, kPitchRowH};
+}
+
+juce::Rectangle<int> pitchCellBounds(int index)
+{
+    const auto cells = pitchRow().withTrimmedLeft(kPitchLabelW);
+    const float cellW = (cells.getWidth() - 4.0f) * 0.5f;
+    return juce::Rectangle<float>(cells.getX() + static_cast<float>(index) * (cellW + 4.0f), cells.getY(), cellW,
+                                  cells.getHeight())
+        .getSmallestIntegerContainer();
+}
+
 juce::String text(std::string_view view)
 {
     return juce::String(view.data(), view.size());
@@ -118,16 +142,37 @@ TurtleTimeEditor::TurtleTimeEditor(TurtleTimeProcessor& plugin)
         {
             if (auto* param = owner.apvts.getParameter(ids::pattern.getParamID()))
                 param->setValueNotifyingHost(param->convertTo0to1(static_cast<float>(i)));
-            refreshPatternHighlight();
+            refreshSelection();
         };
         addAndMakeVisible(*cell);
         patternCells[static_cast<std::size_t>(i)] = std::move(cell);
     }
 
+    for (int keep = 0; keep < 2; ++keep)
+    {
+        auto cell = std::make_unique<ui::PatternCell>(keep == 1 ? "KEEP" : "DROP", theme.palette);
+        cell->setComponentID(keep == 1 ? "keepPitch" : "dropPitch");
+        cell->setTooltip(keep == 1 ? "Keep pitch: HALF and SLOW stretch time but keep the original pitch."
+                                   : "Drop pitch: HALF and SLOW play slower and lower, like tape (one or two "
+                                     "octaves down).");
+        cell->onClick = [this, keep]()
+        {
+            if (auto* param = owner.apvts.getParameter(ids::keepPitch.getParamID()))
+            {
+                param->beginChangeGesture();
+                param->setValueNotifyingHost(static_cast<float>(keep));
+                param->endChangeGesture();
+            }
+            refreshSelection();
+        };
+        addAndMakeVisible(*cell);
+        pitchCells[static_cast<std::size_t>(keep)] = std::move(cell);
+    }
+
     addAndMakeVisible(brand);
     addAndMakeVisible(mixKnob);
 
-    refreshPatternHighlight();
+    refreshSelection();
     setSize(kWidth, kHeight);
     startTimerHz(30);
 }
@@ -142,20 +187,35 @@ int TurtleTimeEditor::selectedPattern() const
     return dynamic_cast<juce::AudioParameterChoice*>(owner.apvts.getParameter(ids::pattern.getParamID()))->getIndex();
 }
 
-void TurtleTimeEditor::refreshPatternHighlight()
+bool TurtleTimeEditor::keepPitchSelected() const
+{
+    return dynamic_cast<juce::AudioParameterBool*>(owner.apvts.getParameter(ids::keepPitch.getParamID()))->get();
+}
+
+void TurtleTimeEditor::refreshSelection()
 {
     const int selected = selectedPattern();
-    if (selected == shownPattern)
+    const int keep = keepPitchSelected() ? 1 : 0;
+    if (selected == shownPattern && keep == shownKeepPitch)
         return;
     shownPattern = selected;
+    shownKeepPitch = keep;
     for (int i = 0; i < dsp::kNumPatterns; ++i)
         patternCells[static_cast<std::size_t>(i)]->setToggleState(i == selected, juce::dontSendNotification);
+
+    // Still clickable for 1x patterns, so the choice can be made before switching to HALF or SLOW.
+    const bool applies = dsp::slowsDown(dsp::patternAt(selected).rate);
+    for (int i = 0; i < 2; ++i)
+    {
+        pitchCells[static_cast<std::size_t>(i)]->setToggleState(i == keep, juce::dontSendNotification);
+        pitchCells[static_cast<std::size_t>(i)]->setAlpha(applies ? 1.0f : 0.45f);
+    }
     repaint();
 }
 
 void TurtleTimeEditor::timerCallback()
 {
-    refreshPatternHighlight();
+    refreshSelection();
     repaint(kDisplay.expanded(2.0f).getSmallestIntegerContainer());
     repaint(kControls.expanded(2.0f).getSmallestIntegerContainer());
 }
@@ -211,11 +271,13 @@ void TurtleTimeEditor::paintDisplay(juce::Graphics& g, juce::Rectangle<float> ar
     g.drawRoundedRectangle(area.reduced(0.5f), 6.0f, 1.0f);
 
     // Readout
+    auto readout = text(dsp::kGroupNames[static_cast<std::size_t>(row)]) + dot() +
+                   text(dsp::kGroupDetails[static_cast<std::size_t>(row)]);
+    if (const auto pitch = dsp::pitchLabel(pattern, keepPitchSelected()); !pitch.empty())
+        readout << dot() << text(pitch);
     g.setColour(palette.accent);
     g.setFont(trackedFont(11.0f, true, 0.16f));
-    g.drawText(text(dsp::kGroupNames[static_cast<std::size_t>(row)]) + dot() +
-                   text(dsp::kGroupDetails[static_cast<std::size_t>(row)]),
-               juce::Rectangle<float>(area.getX() + 18.0f, area.getY() + 14.0f, 360.0f, 14.0f),
+    g.drawText(readout, juce::Rectangle<float>(area.getX() + 18.0f, area.getY() + 14.0f, 420.0f, 14.0f),
                juce::Justification::centredLeft, false);
     g.setColour(palette.text);
     g.setFont(trackedFont(26.0f, true, 0.04f));
@@ -328,15 +390,23 @@ void TurtleTimeEditor::paintControls(juce::Graphics& g, juce::Rectangle<float> a
     g.setColour(palette.text);
     g.setFont(trackedFont(20.0f, true, 0.04f));
     g.drawText(juce::String(juce::roundToInt(mixKnob.getValue() * 100.0)) + "%",
-               juce::Rectangle<float>(area.getX(), area.getY() + 166.0f, area.getWidth(), 24.0f),
+               juce::Rectangle<float>(area.getX(), area.getY() + kMixValueTop, area.getWidth(), 24.0f),
                juce::Justification::centred, false);
 
-    const float dividerY = area.getY() + 200.0f;
+    g.setColour(palette.outline);
+    g.fillRect(area.getX() + 14.0f, area.getY() + kPitchDividerTop, area.getWidth() - 28.0f, 1.0f);
+    g.setColour(dsp::slowsDown(dsp::patternAt(selectedPattern()).rate) ? palette.textDim
+                                                                       : palette.textDim.withAlpha(0.5f));
+    g.setFont(trackedFont(10.5f, true, 0.16f));
+    g.drawText("PITCH", pitchRow().withWidth(kPitchLabelW).withTrimmedLeft(2.0f), juce::Justification::centredLeft,
+               false);
+
+    const float dividerY = area.getY() + kStatusDividerTop;
     g.setColour(palette.outline);
     g.fillRect(area.getX() + 14.0f, dividerY, area.getWidth() - 28.0f, 1.0f);
 
     const bool playing = owner.isHostSynced();
-    const auto status = juce::Rectangle<float>(area.getX() + 16.0f, dividerY + 10.0f, area.getWidth() - 32.0f, 16.0f);
+    const auto status = juce::Rectangle<float>(area.getX() + 16.0f, dividerY + 6.0f, area.getWidth() - 32.0f, 16.0f);
     g.setColour(playing ? palette.accent : palette.detail);
     g.fillEllipse(status.getX(), status.getCentreY() - 3.5f, 7.0f, 7.0f);
     if (playing)
@@ -406,9 +476,12 @@ void TurtleTimeEditor::paint(juce::Graphics& g)
 void TurtleTimeEditor::resized()
 {
     brand.setBounds(getWidth() - 20 - 150, 23, 150, 18);
-    mixKnob.setBounds(juce::Rectangle<float>(kControls.getCentreX() - 68.0f, kControls.getY() + 30.0f, 136.0f, 136.0f)
+    mixKnob.setBounds(juce::Rectangle<float>(kControls.getCentreX() - kKnobSize * 0.5f, kControls.getY() + kKnobTop,
+                                             kKnobSize, kKnobSize)
                           .getSmallestIntegerContainer());
     for (int i = 0; i < dsp::kNumPatterns; ++i)
         patternCells[static_cast<std::size_t>(i)]->setBounds(cellBounds(i));
+    for (int i = 0; i < 2; ++i)
+        pitchCells[static_cast<std::size_t>(i)]->setBounds(pitchCellBounds(i));
 }
 } // namespace turtletime

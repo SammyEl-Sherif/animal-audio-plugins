@@ -34,7 +34,7 @@ animalaudio::dsp::TransportInfo playingAt(double bpm, double ppq)
 }
 
 std::vector<float> render(turtletime::dsp::TurtleTimeEngine& engine, const std::vector<float>& input, double bpm,
-                          int blockSize, bool host)
+                          int blockSize, bool host, int firstSample = 0)
 {
     std::vector<float> output(input.size());
     const double beatsPerSample = bpm / (60.0 * kSampleRate);
@@ -46,7 +46,7 @@ std::vector<float> render(turtletime::dsp::TurtleTimeEngine& engine, const std::
         float* channels[] = {block.data()};
         animalaudio::dsp::TransportInfo transport;
         if (host)
-            transport = playingAt(bpm, static_cast<double>(done) * beatsPerSample);
+            transport = playingAt(bpm, static_cast<double>(firstSample + done) * beatsPerSample);
         engine.process(channels, 1, count, transport);
         std::copy(block.begin(), block.end(), output.begin() + done);
         done += count;
@@ -54,11 +54,47 @@ std::vector<float> render(turtletime::dsp::TurtleTimeEngine& engine, const std::
     return output;
 }
 
-void prepareEngine(turtletime::dsp::TurtleTimeEngine& engine, int pattern, float mix)
+void prepareEngine(turtletime::dsp::TurtleTimeEngine& engine, int pattern, float mix, bool keepPitch = false)
 {
     engine.setPatternIndex(pattern);
     engine.setMix(mix);
+    engine.setKeepPitch(keepPitch);
     engine.prepare(kSampleRate, 512);
+}
+
+std::vector<float> sine(int count, float frequency, float amplitude)
+{
+    std::vector<float> samples(static_cast<std::size_t>(count));
+    for (int i = 0; i < count; ++i)
+        samples[static_cast<std::size_t>(i)] =
+            amplitude * std::sin(2.0f * juce::MathConstants<float>::pi * frequency * static_cast<float>(i) /
+                                 static_cast<float>(kSampleRate));
+    return samples;
+}
+
+int risingZeroCrossings(const std::vector<float>& samples, int from, int to)
+{
+    int crossings = 0;
+    for (int i = from; i < to; ++i)
+        if (samples[static_cast<std::size_t>(i - 1)] <= 0.0f && samples[static_cast<std::size_t>(i)] > 0.0f)
+            ++crossings;
+    return crossings;
+}
+
+float rms(const std::vector<float>& samples, int from, int to)
+{
+    double sum = 0.0;
+    for (int i = from; i < to; ++i)
+        sum += static_cast<double>(samples[static_cast<std::size_t>(i)]) * samples[static_cast<std::size_t>(i)];
+    return static_cast<float>(std::sqrt(sum / std::max(1, to - from)));
+}
+
+float maxStep(const std::vector<float>& samples)
+{
+    float largest = 0.0f;
+    for (std::size_t i = 1; i < samples.size(); ++i)
+        largest = std::max(largest, std::abs(samples[i] - samples[i - 1]));
+    return largest;
 }
 
 int patternWhere(float rate, double window, turtletime::dsp::TimeMode mode, double slice = 0.0)
@@ -81,6 +117,8 @@ TEST_CASE("turtletime: parameters exist")
     REQUIRE(processor.getName() == "Turtle Time");
     REQUIRE(processor.apvts.getParameter("pattern") != nullptr);
     REQUIRE(processor.apvts.getParameter("mix") != nullptr);
+    REQUIRE(processor.apvts.getParameter("keepPitch") != nullptr);
+    REQUIRE(processor.apvts.getRawParameterValue("keepPitch")->load() < 0.5f);
     REQUIRE(processor.apvts.getParameter("fallbackBpm") == nullptr);
     REQUIRE(processor.getNumPrograms() == turtletime::dsp::kNumPatterns);
     REQUIRE(processor.getCurrentProgram() == turtletime::dsp::kDefaultPattern);
@@ -112,12 +150,14 @@ TEST_CASE("turtletime: state round trip")
         processor.apvts.getParameter("pattern")->setValueNotifyingHost(
             processor.apvts.getParameter("pattern")->convertTo0to1(3.0f));
         processor.apvts.getParameter("mix")->setValueNotifyingHost(0.25f);
+        processor.apvts.getParameter("keepPitch")->setValueNotifyingHost(1.0f);
         processor.getStateInformation(saved);
     }
 
     turtletime::TurtleTimeProcessor restored;
     restored.setStateInformation(saved.getData(), static_cast<int>(saved.getSize()));
     REQUIRE(restored.apvts.getRawParameterValue("mix")->load() == Approx(0.25f).margin(0.01f));
+    REQUIRE(restored.apvts.getRawParameterValue("keepPitch")->load() > 0.5f);
     REQUIRE(restored.getCurrentProgram() == 3);
     REQUIRE(restored.getProgramName(3) == "Half 1/4");
 }
@@ -187,6 +227,138 @@ TEST_CASE("turtletime: half speed drops a sine one octave")
 
     // 480 Hz over 6000 samples at 48 kHz is 60 rising zeros.
     REQUIRE(crossings == Approx(60).margin(2));
+}
+
+TEST_CASE("turtletime: keep pitch stretches time without dropping the pitch")
+{
+    constexpr double bpm = 240.0; // a half note == 24000 samples, one window
+    constexpr int span = 24000;
+    for (const float rate : {0.5f, 0.25f})
+    {
+        CAPTURE(rate);
+        const int pattern = patternWhere(rate, 2.0, turtletime::dsp::TimeMode::CatchUp);
+
+        turtletime::dsp::TurtleTimeEngine engine;
+        prepareEngine(engine, pattern, 1.0f, true);
+        const auto output = render(engine, sine(span, 960.0f, 0.8f), bpm, 512, true);
+        // 960 Hz over 6000 samples at 48 kHz is 120 rising zeros; tape mode would give 120 * rate.
+        REQUIRE(risingZeroCrossings(output, 3001, 9000) == Approx(120).margin(3));
+
+        // A 100 ms burst now lasts 1 / rate times longer and is gone once the slow read position is past it.
+        auto burst = sine(span, 960.0f, 0.8f);
+        std::fill(burst.begin() + 4800, burst.end(), 0.0f);
+        turtletime::dsp::TurtleTimeEngine stretched;
+        prepareEngine(stretched, pattern, 1.0f, true);
+        const auto held = render(stretched, burst, bpm, 512, true);
+        const int burstEnd = static_cast<int>(4800.0f / rate);
+        REQUIRE(rms(held, burstEnd / 2, burstEnd * 6 / 10) > 0.4f);
+        REQUIRE(rms(held, burstEnd * 11 / 10 + 600, burstEnd * 11 / 10 + 1600) < 0.01f);
+    }
+}
+
+TEST_CASE("turtletime: keep pitch holds a steady level across grains")
+{
+    constexpr double bpm = 240.0;
+    constexpr int window = 12000;
+    const float expected = 0.8f / std::sqrt(2.0f);
+    for (const float rate : {0.5f, 0.25f})
+        for (const int halfPeriod : {800, 480, 320, 200, 60, 16, 4}) // 30 Hz .. 6 kHz
+        {
+            const float frequency = static_cast<float>(kSampleRate) / static_cast<float>(2 * halfPeriod);
+            CAPTURE(rate, frequency);
+            turtletime::dsp::TurtleTimeEngine engine;
+            prepareEngine(engine, patternWhere(rate, 1.0, turtletime::dsp::TimeMode::CatchUp), 1.0f, true);
+            const auto output = render(engine, sine(3 * window, frequency, 0.8f), bpm, 256, true);
+
+            // Whole half periods, so an unaltered sine measures exactly `expected` wherever the chunk starts.
+            // The first window is skipped: right after prepare() there is no history for grains to align with.
+            const int chunk = halfPeriod * ((480 + halfPeriod - 1) / halfPeriod);
+            float lowest = 10.0f;
+            float highest = 0.0f;
+            for (int w = 1; w < 3; ++w)
+                for (int start = w * window + 960; start + chunk <= (w + 1) * window; start += chunk)
+                {
+                    const float level = rms(output, start, start + chunk);
+                    lowest = std::min(lowest, level);
+                    highest = std::max(highest, level);
+                }
+            CAPTURE(lowest / expected, highest / expected);
+            // Below ~50 Hz a period is longer than the alignment search, so some wobble remains.
+            const float tolerance = frequency < 45.0f ? 0.15f : 0.05f;
+            REQUIRE(lowest > expected * (1.0f - tolerance));
+            REQUIRE(highest < expected * (1.0f + tolerance));
+        }
+}
+
+TEST_CASE("turtletime: switching keep pitch mid-window stays click-free")
+{
+    constexpr double bpm = 240.0;
+    turtletime::dsp::TurtleTimeEngine engine;
+    prepareEngine(engine, patternWhere(0.5f, 1.0, turtletime::dsp::TimeMode::CatchUp), 1.0f);
+    const auto input = sine(24000, 440.0f, 0.8f);
+
+    std::vector<float> output;
+    constexpr int segment = 4000;
+    for (int start = 0; start < 24000; start += segment)
+    {
+        engine.setKeepPitch((start / segment) % 2 == 1);
+        const std::vector<float> part(input.begin() + start, input.begin() + start + segment);
+        const auto rendered = render(engine, part, bpm, 300, true, start);
+        output.insert(output.end(), rendered.begin(), rendered.end());
+    }
+    REQUIRE(maxStep(output) < 0.2f);
+    REQUIRE(maxStep(output) == Approx(maxStep(input)).margin(0.1f));
+}
+
+TEST_CASE("turtletime: keep pitch does not depend on the block size")
+{
+    constexpr double bpm = 240.0;
+    std::vector<float> input(15000);
+    for (std::size_t i = 0; i < input.size(); ++i)
+        input[i] = std::sin(static_cast<float>(i) * 0.017f) + 0.3f * std::sin(static_cast<float>(i) * 0.093f);
+
+    const int pattern = patternWhere(0.5f, 1.0, turtletime::dsp::TimeMode::CatchUp);
+    turtletime::dsp::TurtleTimeEngine fine;
+    turtletime::dsp::TurtleTimeEngine coarse;
+    prepareEngine(fine, pattern, 1.0f, true);
+    prepareEngine(coarse, pattern, 1.0f, true);
+    const auto a = render(fine, input, bpm, 1, true);
+    const auto b = render(coarse, input, bpm, 173, true);
+    for (std::size_t i = 0; i < input.size(); i += 10)
+        REQUIRE(a[i] == Approx(b[i]).margin(0.02f));
+}
+
+TEST_CASE("turtletime: keep pitch leaves reverse and repeat alone")
+{
+    constexpr double bpm = 240.0;
+    std::vector<float> input(30000);
+    for (std::size_t i = 0; i < input.size(); ++i)
+        input[i] = std::sin(static_cast<float>(i) * 0.01f);
+
+    for (const int pattern : {patternWhere(-1.0f, 1.0, turtletime::dsp::TimeMode::CatchUp),
+                              patternWhere(1.0f, 4.0, turtletime::dsp::TimeMode::Repeat, 0.5)})
+    {
+        CAPTURE(pattern);
+        turtletime::dsp::TurtleTimeEngine tape;
+        turtletime::dsp::TurtleTimeEngine kept;
+        prepareEngine(tape, pattern, 1.0f, false);
+        prepareEngine(kept, pattern, 1.0f, true);
+        REQUIRE(render(tape, input, bpm, 512, true) == render(kept, input, bpm, 512, true));
+    }
+}
+
+TEST_CASE("turtletime: pitch label follows the toggle")
+{
+    using turtletime::dsp::patternAt;
+    using turtletime::dsp::pitchLabel;
+    const int half = patternWhere(0.5f, 4.0, turtletime::dsp::TimeMode::CatchUp);
+    const int slow = patternWhere(0.25f, 4.0, turtletime::dsp::TimeMode::CatchUp);
+    const int reverse = patternWhere(-1.0f, 4.0, turtletime::dsp::TimeMode::CatchUp);
+    REQUIRE(pitchLabel(patternAt(half), false) == "1 OCTAVE DOWN");
+    REQUIRE(pitchLabel(patternAt(slow), false) == "2 OCTAVES DOWN");
+    REQUIRE(pitchLabel(patternAt(half), true) == "PITCH KEPT");
+    REQUIRE(pitchLabel(patternAt(reverse), false).empty());
+    REQUIRE(pitchLabel(patternAt(reverse), true).empty());
 }
 
 TEST_CASE("turtletime: reverse plays the previous window backwards")
@@ -378,6 +550,29 @@ TEST_CASE("turtletime: editor renders headlessly")
                 ++bright;
     REQUIRE(bright > 80);
     writePngIfRequested(image, "turtletime-ui.png");
+}
+
+TEST_CASE("turtletime: editor pitch buttons set keep pitch")
+{
+    juce::ScopedJuceInitialiser_GUI gui;
+    turtletime::TurtleTimeProcessor processor;
+    std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
+    auto* keep = dynamic_cast<juce::Button*>(editor->findChildWithID("keepPitch"));
+    auto* drop = dynamic_cast<juce::Button*>(editor->findChildWithID("dropPitch"));
+    REQUIRE(keep != nullptr);
+    REQUIRE(drop != nullptr);
+    REQUIRE(drop->getToggleState());
+    REQUIRE_FALSE(keep->getToggleState());
+
+    keep->onClick();
+    REQUIRE(processor.apvts.getRawParameterValue("keepPitch")->load() > 0.5f);
+    REQUIRE(keep->getToggleState());
+    REQUIRE_FALSE(drop->getToggleState());
+
+    drop->onClick();
+    REQUIRE(processor.apvts.getRawParameterValue("keepPitch")->load() < 0.5f);
+    REQUIRE(drop->getToggleState());
+    REQUIRE_FALSE(keep->getToggleState());
 }
 
 TEST_CASE("turtletime: build stamp is baked in")
