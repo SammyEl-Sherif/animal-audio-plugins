@@ -14,6 +14,7 @@ Stack: **JUCE 8 + CMake (C++17)**, Catch2 for tests. VST3 only (Standalone optio
 | Duck (volume ducking / shaper) | `plugins/duck` | `Duck` (`Duck_VST3`), tests: `DuckTests` | `Duck` |
 | Turtle Time (half-time / time warp) | `plugins/turtletime` | `TurtleTime` (`TurtleTime_VST3`), tests: `TurtleTimeTests` | `Turt` |
 | Parrot (pitch / formant voice bender) | `plugins/parrot` | `Parrot` (`Parrot_VST3`), tests: `ParrotTests` | `Parr` |
+| Whale (note-based vocal editor) | `plugins/whale` | `Whale` (`Whale_VST3`), tests: `WhaleTests` | `Whal` |
 
 New plugins: use the **`/vst <name or idea>`** skill (see [Creating a plugin with `/vst`](#creating-a-plugin-with-vst)).
 
@@ -89,6 +90,16 @@ plugins/parrot/       pitch / formant voice bender (own processor and editor):
   Source/ui/          ParrotTheme (kThemeHue 355), ParrotMotif (macaw head, feather knob pointer, drifting feathers),
                       ParrotWidgets (ParrotKnob)
   tests/              ParrotTests.cpp
+plugins/whale/        note-based vocal editor (own processor, worker thread and editor):
+  Source/             WhaleProcessor (transfer capture, playback, audition, offline wait), WhaleEditor
+  Source/dsp/         Model (analysis frames, notes, scale), Analysis (pYIN -> words / phrases / notes / marks / cuts),
+                      EditPlan (time map, pitch / formant / gain per output sample), Edits (move, stretch, split,
+                      merge, link, reset), Renderer (offline TD-PSOLA), SegmentCache, Capture, Playback
+  Source/engine/      Session (takes + notes + scale + undo), Worker (thread: capture chunks, analysis, renders),
+                      StateCodec (WHL1 + XML + 24-bit FLAC per take)
+  Source/ui/          WhaleTheme (kThemeHue 186), WhaleMotif (humpback, fluke knob pointer, bubbles),
+                      EditController (selection, gestures, undo), NoteCanvas (piano roll), Inspector, Overview
+  tests/              WhaleTests (processor), WhaleDspTests, WhaleEditorTests; WhaleHost.h / WhaleTestSupport.h
 templates/plugin/     starter copied by scripts/new_plugin.py (placeholders __NAME__, __NAME_LOWER__, __HUE__, ...)
 .cursor/skills/       the /setup, /vst and /release skills (canonical);  .claude/skills/ holds copies made by scripts/sync_skills.sh
 scripts/              new_plugin.py, install_plugins.py (+ tests/), verify_plugin.sh, release_plugin.sh / release_win_plugin.ps1 (any slug), build_mac_pkg.sh, installers/ (mac + win templates), validate/upload release helpers, format.sh, sync_skills.sh, check_repo.sh (docs/RELEASE.md)
@@ -315,6 +326,49 @@ Parrot moves a voice's pitch and formants independently (SHIFT / SNAP / ROBOT) a
   (`accent`), formant blue (`detail`), drive gold (`accentAlt`).
 - Limits: the tube model is physically based, not a copy of any commercial saturator. PSOLA is monophonic: chords
   or doubled voices will warble.
+
+## Whale specifics
+
+Whale is a note-based vocal editor (Melodyne-like workflow; original design, DSP and art). Live has no ARA, so audio
+arrives by **transfer**: TRANSFER arms, the host plays, `processBlock` records into `dsp::CaptureBuffer` (fixed
+chunks the worker allocates ahead; overflow ends the take) at the song position; a stop or a jump ends it. While the
+host plays over a take Whale outputs the edited take instead of its input (input passes through elsewhere and during
+capture). Stopped, clicking a note auditions it. A take plays only at the rate it was recorded at.
+
+- Threads: audio thread captures and reads the published `dsp::PlaybackMap` (RCU via `PlaybackExchange`, no locks);
+  `engine::Worker` turns captures into takes, analyses them and re-renders the segments edits touched, always from
+  the newest `engine::Session` snapshot; the editor edits the Session on the message thread (`CriticalSection`, never
+  taken on the audio thread). In non-realtime rendering `processBlock` waits for the worker (bounces get every edit).
+- Analysis (`Source/dsp/Analysis.h`): `dsp::ProbabilisticYin` -> drift (4 Hz zero-phase low-pass) -> words (voiced
+  stretches) / phrases (pauses < 200 ms) -> notes (PELT on drift with glide frames weighted down, 6 dB level dips,
+  merge < 0.6 st, boundary at the steepest slope; notes inside a word are linked) -> consonants attach to the
+  neighbouring note -> pitch marks (`dsp::psola`) -> render cuts at the quietest point of each pause.
+- Edit model (`dsp::Note`): source span, output span, `pitch`, `snap` (0..1 pull of the centre to `Scale`), `drift`
+  (STRAIGHTEN = 1 - drift), `vibrato` (0..2), `formant`, `gainDb`, `muted`, and the transition into the next linked
+  note: `glide`, `curve` (-1 early .. 1 late) and `shaped`. Target pitch =
+  centre' + drift * (slow - centre) + vibrato * (sung - slow). As sung (`shaped` false) only the two notes' shifts
+  blend over the glide, so an untouched take is the recording; shaped, the drift and vibrato terms fade out within
+  max(80 ms, glide / 2) of the boundary (back over 40 ms) and the pitch is the designed ramp. A cut is as sung.
+- Timing edits keep notes ordered and attached (linked neighbours stretch along, unlinked ones are walls, 20 ms
+  minimum, 1/4x..4x); a stretched note keeps its first 30 ms of voicing (plus consonants) at 1x.
+- Renderer: offline TD-PSOLA on the analysis marks, formant by resampling grains (`SincReader::applyLinear`),
+  unvoiced 5 ms grains at their own time, level follows the source. Any sub-range render equals the full render
+  to < 1e-4, so `SegmentCache` re-renders only segments (between render cuts) whose note signature changed, and
+  `dsp::readTake` crossfades them (sin^2) into the original.
+- Parameters (APVTS, version 1): `mix` (edited vs recording, default 100%), `compare` (bool, plays the recording).
+  Notes, takes and scale live in the Session and are saved as "WHL1" + XML + per-take 24-bit FLAC (bit-exact
+  reload, same analysis). Undo: 200 snapshots of notes + scale.
+- UI (`WhaleEditor`, 1180x720): header (humpback, WHALE, TRANSFER button, take status + input meter, brand
+  badge); toolbar (EDIT / CUT, NOTE / WORD / PHRASE granularity, UNDO / REDO, FOLLOW, FIT, zoom, CLEAR); the
+  `NoteCanvas` piano roll (blobs shaped by loudness at the target pitch, the pitch to be sung drawn through them,
+  the recorded pitch dashed under edited notes, glide diamonds: hollow = as sung, filled = shaped); the
+  `Overview` strip; the `Inspector` (NOTES: PITCH / SNAP / STRAIGHTEN / VIBRATO, SOUND: FORMANT / GAIN, GLIDE:
+  GLIDE / CURVE, SCALE, OUTPUT: MIX / COMPARE). PITCH, FORMANT and GAIN knobs are relative (each note keeps its
+  offset); the others set absolute values. Editor tests use synthetic component events only.
+- Palette: blue-black water with an aqua accent for notes (`kThemeHue` 186); coral (`accentAlt`) marks the selection
+  and glides, violet (`detail`) the formant.
+- Limits: monophonic; takes are tied to song time (moving the clip or changing tempo needs a new transfer); pYIN,
+  not a neural tracker.
 
 ## Branding
 

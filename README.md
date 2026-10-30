@@ -48,6 +48,7 @@ and [AGENTS.md](AGENTS.md).
 | **Duck** | Tempo-synced volume ducking with a draggable curve editor, 16 preset shapes and a big MIX knob | `plugins/duck` | Alpha: builds as VST3, all tests pass, passes pluginval level 10 on Linux; not yet tried in a real DAW |
 | **Turtle Time** | Tempo-synced half-time, reverse, and beat repeat | `plugins/turtletime` | Private beta (0.1.0): VST3 builds, plugin tests pass, passes pluginval level 10 on macOS; loaded in Ableton Live on macOS |
 | **Parrot** | Pitch and formant voice bender with snap, robot and tube drive | `plugins/parrot` | Alpha (0.1.0): VST3 builds, plugin tests pass, passes pluginval level 10 on macOS; not yet tried in a DAW |
+| **Whale** | Note-based vocal editor: move, snap, stretch and glide every note | `plugins/whale` | Alpha (0.1.0): VST3 builds, plugin tests pass, passes pluginval level 10 on macOS (GUI tests skipped); not yet tried in a DAW |
 <!-- PLUGINS:END -->
 
 More animals are on the way. Adding one takes a single command (or the `/vst` agent skill), see [Adding a plugin](#adding-a-plugin).
@@ -133,6 +134,53 @@ hold it on one robot note, then push it through a modelled tube preamp.
 </p>
 
 > Screenshot from `AA_SCREENSHOT_DIR=docs/images ./build/plugins/parrot/ParrotTests "parrot: editor renders headlessly"`.
+
+## Whale
+
+A note-based vocal editor. Record a vocal into Whale and it finds every note, word and phrase. Then move notes
+onto other notes, set how hard each one snaps to the scale, stretch them, cut them, and shape how one note glides
+into the next. The workflow takes cues from note-based pitch editors; the design, DSP and art are original.
+
+- **Getting audio in (TRANSFER)**: Live has no ARA, so Whale records what it plays. Arm TRANSFER, play the passage,
+  stop. The take sits at its place on the song timeline; from then on, while Live plays over it, Whale outputs the
+  edited take instead of its input (everything else passes through). Transferring the same stretch again replaces
+  the take. Takes are saved with the set as 24-bit FLAC inside the plugin state, so a reload gives back the same
+  take and the same notes.
+- **Analysis**: pitch by pYIN (Mauch & Dixon, 2014): YIN with a spread of thresholds and a hidden Markov model
+  decoded by Viterbi, which removes the octave slips and voicing glitches plain YIN makes, then refined to a few
+  cents. Words are voiced stretches; phrases are words less than 200 ms apart. Inside a word, notes are found by
+  optimal change-point detection (PELT, Killick et al., 2012) on the vibrato-free pitch, plus level dips for
+  re-sung syllables, and each boundary sits at the steepest point of the slide. Consonants and breaths belong to
+  the note next to them, so they move with it. A 45-second vocal analyses in about 0.4 s.
+- **Moving notes**: drag a note up or down in semitones (it lands on the scale) or, with Alt, in cents; sideways
+  to move it in time; drag an edge to stretch it (1/4x to 4x, the consonant attack keeps its speed). A click
+  selects a NOTE, WORD or PHRASE (toolbar); shift-click adds, a band drag selects many, Cmd+A selects all.
+- **Shaping notes** (the selection, or every note when nothing is selected): PITCH; SNAP, how far each note's
+  centre is pulled onto the scale (per note or all at once); STRAIGHTEN, which flattens slow drift and keeps the
+  vibrato; VIBRATO from 0 to 200%; FORMANT; GAIN. SCALE sets the key and chromatic / major / minor for SNAP.
+- **Cutting and gliding**: the CUT tool splits a note into two linked notes; move the parts onto different
+  notes and they glide into each other. Untouched, a glide is the singer's own. Drag the diamond between two
+  linked notes sideways for the glide time (5 to 600 ms) and up or down for its curve (leave early, or hold and
+  arrive late): the sung slide is replaced by that one. Double-click the diamond to go back. Alt-click a
+  separation to link or unlink notes, double-click it to merge them.
+- **Workflow**: undo / redo (200 steps), a right-click menu, keys (arrows nudge pitch and time, S snaps, 0 resets
+  the sound, T the timing, 1 / 2 pick the tool, F fits), an overview strip of the song, click a note while
+  stopped to hear it, COMPARE for the recording, MIX between both.
+- **Rendering**: TD-PSOLA (Moulines & Charpentier, 1990) from the analysis pitch marks, rendered in the
+  background; formants move by resampling each grain (band-limited sinc). Only the phrases an edit touches are
+  re-rendered, and they crossfade into their neighbours at pauses. On a real 45-second vocal with every note moved
+  and snapped, the output pitch is within 1.2 cents of the edit (median; 90% within 6.6 cents). Exporting or
+  freezing waits for the renderer, so the bounce has every edit. No latency.
+- **Limits**: one voice at a time (no chords or doubled vocals). Takes are tied to song time: move the clip in
+  Live and you need to transfer again, and tempo changes do not stretch takes. A take plays at the sample rate it
+  was recorded at. Pitch tracking is signal processing (pYIN), not a neural tracker; very breathy or distorted
+  vocals can lose notes, which cutting and merging can fix.
+
+<p align="center">
+  <img src="docs/images/whale-ui.png" alt="Whale by Animal Audio" width="760">
+</p>
+
+> Screenshot from `AA_SCREENSHOT_DIR=docs/images ./build/plugins/whale/WhaleTests "whale: editor renders headlessly"`.
 
 ## Build
 
