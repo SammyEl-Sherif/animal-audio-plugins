@@ -43,8 +43,14 @@ shared/dsp/           animalaudio::dsp  INTERFACE, pure C++17, NO JUCE. Tests in
   ShapeCurve.h        node/bend curve (message thread) + CurveTable (baked LUT for the audio thread)
   CurvePreset.h       CurvePreset / CurvePresetList;  StandardPresets.h: the 16 stock shapes (plugin supplies names)
   CurveGainShaper.h   curve -> gain engine (declick, mix, scope feed);  CycleScope.h: audio->UI scope bins
+  Yin.h               YIN building blocks (anti-alias low-pass, difference function, CMND, parabolic dip depth)
   PitchTracker.h      YIN pitch tracker (decimated, refined at full rate, harmonic-error guard), one estimate / ~2.7 ms
-  WindowedSinc.h      Kaiser-windowed sinc design + SincReader (band-limited fractional read, stretch up to 2x)
+  ProbabilisticYin.h  offline pYIN: 100 Beta(2,18) thresholds, HMM Viterbi over 20-cent bins, full-rate refinement
+  Psola.h             TD-PSOLA pieces: phase-locked pitch marks (fractional, no drift), asymmetric Hann grain
+  ChangePoints.h      PELT: optimal split of a weighted sequence into constant-mean segments
+  Notes.h             noteName ("C4" = MIDI 60), isBlackKey
+  WindowedSinc.h      Kaiser-windowed sinc design + SincReader (band-limited fractional read, stretch up to 2x;
+                      applyLinear for plain buffers)
   Oversampler.h       Oversampler4x (polyphase Kaiser FIR, integer latency of 32 base samples)
   TubeDrive.h         two 12AX7 stages (Koren triode, Cohen & Helie constants, grid current, cathode bias shift),
                       4x oversampled, level-matched, exactly clean at drive 0; heat meter for the UI
@@ -53,13 +59,18 @@ shared/core/          animalaudio::core INTERFACE (sources compile into each plu
   CurveShaperProcessor  base AudioProcessor: standard params (division, mix, fallbackBpm), state save/restore,
                       transport + phase plumbing; GainShaperProcessor = same with CurveGainShaper DSP
   TransportReader.h   AudioPlayHead -> dsp::TransportInfo
+  TextFormat.h        formatSemitones ("+2 st"), formatCents, joinWithDots (status lines)
 shared/ui/            animalaudio::ui   INTERFACE lib whose .cpp files compile into each plugin
   Palette.h           colour roles every widget draws from; makePaletteFromHue(); makeFont(height, bold, kerning)
   Theme.h             Theme { Palette, name, tagline, Motif }; Motif = the animal (mascot, knob cap, ambient, decoration)
   ShaperEditor        optional shared curve-shaper editor (Duck uses it at 820x470); not required for every plugin
   BrandBadge, PillButton, ChoicePillRow, RotaryKnob/ThemedKnob, CurveEditor, CurvePresetPanel, Drawing.h
+                      (incl. drawArrowGlyph)
+  AccentKnob          one colour per control, the Motif's cap in that colour, bipolar arcs from 12 o'clock
+  Panels.h            drawTitleBar, drawPanel, drawScreen (recessed display), drawSemitoneRows (piano-roll rows)
 shared/testing/       animalaudio::testing header-only Catch2 suites: AA_SHAPER_PLUGIN_TESTS, AA_GAIN_SHAPER_PLUGIN_TESTS
   SignalProbe.h       JUCE-free signal helpers for DSP tests (sine, noise, rms, tone amplitude, peak frequency, cents)
+  VoiceSynth.h        synthetic sung phrases (SungNote: pitch, vibrato, consonant, legato glide; sungAt, sing)
 plugins/duck/         only what is Duck-specific:
   Source/             DuckProcessor (GainShaperProcessor + presets), DuckEditor (ShaperEditor + DuckTheme)
   Source/dsp/         DuckPresets (names for the standard shapes)

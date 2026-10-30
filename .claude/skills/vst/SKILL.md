@@ -82,13 +82,20 @@ Open this table and decide, for every piece the concept needs, whether it alread
 | 16 stock curve shapes | `dsp/StandardPresets.h` (you supply names) |
 | curve-shaper editor (optional) | `ui/ShaperEditor.h` + `ui/Theme.h` — use when the UX matches Duck; otherwise a custom editor |
 | branding + look | `BrandBadge`, `Theme` (`Palette` + `Motif`), `makePaletteFromHue`, `makeFont` (with kerning) |
-| widgets (mix and match) | `PillButton`, `ChoicePillRow`, `RotaryKnob`/`ThemedKnob`, `CurveEditor`, `CurvePresetPanel`, `Drawing.h` |
-| monophonic pitch detection (voice, bass, lead) | `dsp/PitchTracker.h` (YIN, ~2.7 ms hop) |
-| band-limited fractional reads / resampling, FIR design | `dsp/WindowedSinc.h` `SincReader`, `designLowpass` |
+| widgets (mix and match) | `PillButton`, `ChoicePillRow`, `RotaryKnob`/`ThemedKnob`, `AccentKnob` (one colour per control), `CurveEditor`, `CurvePresetPanel`, `Drawing.h` |
+| panels, title bar, recessed display, piano-roll rows | `ui/Panels.h` |
+| value text ("+2 st", cents, dotted status lines) | `core/TextFormat.h` |
+| monophonic pitch detection (voice, bass, lead) | `dsp/PitchTracker.h` (YIN, ~2.7 ms hop); YIN pieces in `dsp/Yin.h` |
+| offline pitch track of a recording (robust voicing, no octave slips) | `dsp/ProbabilisticYin.h` (pYIN + HMM) |
+| splitting a curve into steady segments (notes, levels) | `dsp/ChangePoints.h` (PELT) |
+| pitch shifting by grains (TD-PSOLA marks and windows) | `dsp/Psola.h` |
+| note names, black keys | `dsp/Notes.h` |
+| band-limited fractional reads / resampling, FIR design | `dsp/WindowedSinc.h` `SincReader` (`applyLinear` for plain buffers), `designLowpass` |
 | 4x oversampling for nonlinear stages | `dsp/Oversampler.h` `Oversampler4x` |
 | tube saturation / drive | `dsp/TubeDrive.h` (two 12AX7 stages, level-matched, clean at 0) |
 | test suites | `shared/testing`: `AA_SHAPER_PLUGIN_TESTS`, `AA_GAIN_SHAPER_PLUGIN_TESTS` |
 | numeric DSP test helpers (tone amplitude, peak frequency, cents) | `shared/testing`: `SignalProbe.h` |
+| synthetic singing for voice tests (notes, vibrato, consonants, legato) | `shared/testing`: `VoiceSynth.h` |
 
 Skim the headers (`ls shared/*/include/animalaudio/*`) rather than trusting this table; it can be stale.
 If your effect needs something the base class does not offer (another parameter, a different DSP,
