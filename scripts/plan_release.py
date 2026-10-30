@@ -170,6 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bump", choices=BUMPS, default="auto")
     parser.add_argument("--ref", default="HEAD")
     parser.add_argument("--github-output", action="store_true", help="Write releases/count to $GITHUB_OUTPUT")
+    parser.add_argument("--require", action="store_true", help="Fail when nothing would be released (manual runs)")
     args = parser.parse_args(argv)
 
     slugs = list_plugin_slugs()
@@ -193,6 +194,10 @@ def main(argv: list[str] | None = None) -> int:
                 out.write(summary(releases))
     else:
         print(payload)
+    if args.require and not releases:
+        print(f"error: nothing new to release for {', '.join(slugs)} since the last tag. Pick bump patch / minor / "
+              "major for a new version, or current to re-upload the current version.", file=sys.stderr)
+        return 1
     return 0
 
 

@@ -50,7 +50,7 @@ the failed jobs and the rest of the run continues. The tag commit is pushed by t
 **Manual release:** Actions → **Release** → Run workflow, pick the plugin and a bump:
 
 ```bash
-gh workflow run release.yml -f plugin=duck                    # auto: from commits since the last tag
+gh workflow run release.yml -f plugin=duck                    # auto: from commits since the last tag (fails if none)
 gh workflow run release.yml -f plugin=duck -f bump=patch      # patch | minor | major
 gh workflow run release.yml -f plugin=duck -f bump=current    # re-release the current version (re-upload)
 gh workflow run release.yml -f plugin=duck -f dry_run=true    # build + sign + notarize only (any branch)
