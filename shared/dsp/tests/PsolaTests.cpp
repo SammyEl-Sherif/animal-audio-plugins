@@ -1,5 +1,6 @@
 #include <animalaudio/dsp/Notes.h>
 #include <animalaudio/dsp/Psola.h>
+#include <animalaudio/dsp/WindowedSinc.h>
 #include <animalaudio/dsp/Yin.h>
 #include <animalaudio/testing/SignalProbe.h>
 
@@ -84,4 +85,25 @@ TEST_CASE("Notes: names and conversions")
     REQUIRE(midiToHz(57.0f) == Catch::Approx(220.0f));
     REQUIRE(isSharp(61));
     REQUIRE_FALSE(isSharp(64));
+}
+
+TEST_CASE("SincReader: a plain buffer reads like the ring buffer and is silent outside")
+{
+    std::vector<float> ring(1024);
+    for (std::size_t i = 0; i < ring.size(); ++i)
+        ring[i] =
+            static_cast<float>(std::sin(0.05 * static_cast<double>(i)) + 0.3 * std::sin(0.31 * static_cast<double>(i)));
+    SincReader reader;
+    SincReader::Weights w;
+    for (const double position : {100.25, 512.0, 700.9})
+        for (const float stretch : {1.0f, 1.5f})
+        {
+            reader.prepareRead(position, stretch, w);
+            REQUIRE(SincReader::applyLinear(w, ring.data(), 1024) ==
+                    Catch::Approx(SincReader::apply(w, ring.data(), 1023)).margin(1.0e-6));
+        }
+    reader.prepareRead(-40.0, 1.0f, w);
+    REQUIRE(SincReader::applyLinear(w, ring.data(), 1024) == Catch::Approx(0.0f).margin(1.0e-9));
+    reader.prepareRead(1060.0, 1.0f, w);
+    REQUIRE(SincReader::applyLinear(w, ring.data(), 1024) == Catch::Approx(0.0f).margin(1.0e-9));
 }

@@ -72,6 +72,39 @@ struct SungNote
     float level = 1.0f;
 };
 
+/** Pitch (MIDI) and amplitude of a sung phrase at time `t`; pitch is -1 where nothing is sung. */
+struct SungSample
+{
+    double midi = -1.0;
+    double amplitude = 0.0;
+};
+
+inline SungSample sungAt(const std::vector<SungNote>& notes, double t)
+{
+    for (std::size_t n = 0; n < notes.size(); ++n)
+    {
+        const auto& note = notes[n];
+        const double local = t - note.start;
+        if (local < 0.0 || local >= note.length)
+            continue;
+        const SungNote* previous = n > 0 ? &notes[n - 1] : nullptr;
+        double midi = note.midi + note.detuneCents / 100.0 +
+                      note.vibratoCents / 100.0 * std::sin(2.0 * kPi * note.vibratoHz * local);
+        if (previous != nullptr && note.glideFromPrevious > 0.0 && local < note.glideFromPrevious)
+        {
+            const double u = local / note.glideFromPrevious;
+            const double s = u * u * (3.0 - 2.0 * u);
+            const double from = previous->midi + previous->detuneCents / 100.0;
+            midi = from + (midi - from) * s;
+        }
+        const double attack = note.glideFromPrevious > 0.0 ? 1.0 : std::min(1.0, local / 0.015);
+        const bool legatoNext = n + 1 < notes.size() && notes[n + 1].glideFromPrevious > 0.0;
+        const double release = legatoNext ? 1.0 : std::min(1.0, (note.length - local) / 0.03);
+        return {midi, note.level * std::max(0.0, std::min(attack, release))};
+    }
+    return {};
+}
+
 /**
  * A monophonic sung phrase: each note is the /a/ vowel with a 15 ms attack and 30 ms release (or a legato slide
  * from the previous note), consonants are band-passed noise bursts, everything else is silence. Peak ~`peak`.
@@ -82,30 +115,11 @@ inline std::vector<float> sing(const std::vector<SungNote>& notes, double second
     const auto count = static_cast<std::size_t>(seconds * rate);
     std::vector<double> pitch(count, -1.0);
     std::vector<double> amp(count, 0.0);
-    for (std::size_t n = 0; n < notes.size(); ++n)
+    for (std::size_t i = 0; i < count; ++i)
     {
-        const auto& note = notes[n];
-        const auto begin = static_cast<std::size_t>(std::max(0.0, note.start * rate));
-        const auto end = std::min(count, static_cast<std::size_t>((note.start + note.length) * rate));
-        const double* previous = n > 0 ? &notes[n - 1].midi : nullptr;
-        for (std::size_t i = begin; i < end; ++i)
-        {
-            const double t = static_cast<double>(i) / rate - note.start;
-            double midi = note.midi + note.detuneCents / 100.0 +
-                          note.vibratoCents / 100.0 * std::sin(2.0 * kPi * note.vibratoHz * t);
-            if (previous != nullptr && note.glideFromPrevious > 0.0 && t < note.glideFromPrevious)
-            {
-                const double u = t / note.glideFromPrevious;
-                const double s = u * u * (3.0 - 2.0 * u);
-                midi = *previous + notes[n - 1].detuneCents / 100.0 +
-                       (midi - *previous - notes[n - 1].detuneCents / 100.0) * s;
-            }
-            pitch[i] = midi;
-            const double attack = note.glideFromPrevious > 0.0 ? 1.0 : std::min(1.0, t / 0.015);
-            const bool legatoNext = n + 1 < notes.size() && notes[n + 1].glideFromPrevious > 0.0;
-            const double release = legatoNext ? 1.0 : std::min(1.0, (note.length - t) / 0.03);
-            amp[i] = note.level * std::max(0.0, std::min(attack, release));
-        }
+        const auto sample = sungAt(notes, static_cast<double>(i) / rate);
+        pitch[i] = sample.midi;
+        amp[i] = sample.amplitude;
     }
 
     std::vector<float> out(count, 0.0f);

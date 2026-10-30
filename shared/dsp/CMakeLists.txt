@@ -9,6 +9,7 @@ if(AA_BUILD_TESTS)
         tests/CurveGainShaperTests.cpp
         tests/OversamplerTests.cpp
         tests/PitchTrackerTests.cpp
+        tests/ProbabilisticYinTests.cpp
         tests/PsolaTests.cpp
         tests/ShapeCurveTests.cpp
         tests/StandardPresetsTests.cpp

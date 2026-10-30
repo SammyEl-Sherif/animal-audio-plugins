@@ -121,6 +121,17 @@ public:
         return sum;
     }
 
+    /** Reads a plain buffer of `length` samples; taps outside it read zero. */
+    static float applyLinear(const Weights& weights, const float* data, std::int64_t length) noexcept
+    {
+        const std::int64_t first = std::max<std::int64_t>(0, -weights.first);
+        const std::int64_t last = std::min<std::int64_t>(weights.count, length - weights.first);
+        float sum = 0.0f;
+        for (std::int64_t k = first; k < last; ++k)
+            sum += weights.values[k] * data[weights.first + k];
+        return sum;
+    }
+
     /** Samples needed on either side of a read position at `stretch`. */
     static int reachFor(float stretch) noexcept
     {
