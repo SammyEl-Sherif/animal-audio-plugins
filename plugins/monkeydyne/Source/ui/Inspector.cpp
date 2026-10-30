@@ -4,7 +4,6 @@
 
 #include <animalaudio/core/TextFormat.h>
 #include <animalaudio/ui/Drawing.h>
-#include <animalaudio/ui/Panels.h>
 
 #include <algorithm>
 #include <cmath>
@@ -133,7 +132,7 @@ Inspector::Inspector(EditController& c, const animalaudio::ui::Theme& t, juce::A
                                            "SNAP aims at the notes of the natural minor scale."};
     for (int i = 0; i < 3; ++i)
     {
-        auto button = std::make_unique<animalaudio::ui::PillButton>(kModeNames[i], palette);
+        auto button = std::make_unique<GlassButton>(kModeNames[i], palette);
         button->setTooltip(modeTips[i]);
         button->onClick = [this, i]
         {
@@ -293,8 +292,14 @@ void Inspector::resized()
 void Inspector::paintPanel(juce::Graphics& g, int index, const juce::String& title, juce::Colour key,
                            const juce::String& note) const
 {
+    const auto& palette = theme.palette;
     const auto area = panelArea(index);
-    animalaudio::ui::drawPanel(g, area, title, key, theme.palette);
+    drawGlassPanel(g, area, 10.0f, palette);
+    const auto row = juce::Rectangle<float>(area.getX() + 18.0f, area.getY() + 14.0f, area.getWidth() - 36.0f, 14.0f);
+    drawGem(g, {row.getX() + 3.5f, row.getCentreY()}, 3.5f, key);
+    g.setColour(palette.textDim);
+    g.setFont(makeFont(11.0f, true, 0.24f));
+    g.drawText(title, row.withTrimmedLeft(15.0f), juce::Justification::centredLeft, false);
     if (note.isNotEmpty())
     {
         g.setColour(theme.palette.textDim.withAlpha(0.8f));

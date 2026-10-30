@@ -6,20 +6,20 @@ namespace monkeydyne::ui
 {
 animalaudio::ui::Palette makePalette()
 {
-    // Jungle at night: teal-black canopy, an aqua accent for notes, warm coral for what is selected (and, darkened,
-    // the monkey's fur), violet for formant.
+    // Titanium and glass: graphite metal with a faint plum cast, orchid pearl for notes, champagne gold for what
+    // is selected (and, darkened, the monkey's bronze), mint for formant.
     animalaudio::ui::Palette palette;
-    palette.background = juce::Colour(0xff081014);
-    palette.panel = juce::Colour(0xff0e1a20);
-    palette.panelRaised = juce::Colour(0xff16262e);
-    palette.outline = juce::Colour(0xff22363f);
-    palette.text = juce::Colour(0xffe9f7f8);
-    palette.textDim = juce::Colour(0xff86a3a9);
-    palette.accent = juce::Colour(0xff3fd8e2);
-    palette.accentAlt = juce::Colour(0xffffa36b);
-    palette.onAccent = juce::Colour(0xff04181b);
-    palette.detail = juce::Colour(0xff9d8cff);
-    palette.ambient = juce::Colour(0xff060d11);
+    palette.background = juce::Colour(0xff100e11);
+    palette.panel = juce::Colour(0xff1b191d);
+    palette.panelRaised = juce::Colour(0xff28252b);
+    palette.outline = juce::Colour(0xff3e3a42);
+    palette.text = juce::Colour(0xfff6f3f8);
+    palette.textDim = juce::Colour(0xffa7a1ab);
+    palette.accent = juce::Colour(0xffee86e4);
+    palette.accentAlt = juce::Colour(0xfff3c77f);
+    palette.onAccent = juce::Colour(0xff26091f);
+    palette.detail = juce::Colour(0xff8ee8c4);
+    palette.ambient = juce::Colour(0xff0a090b);
     return palette;
 }
 

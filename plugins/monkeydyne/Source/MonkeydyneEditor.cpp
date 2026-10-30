@@ -2,7 +2,6 @@
 
 #include <animalaudio/core/BuildStamp.h>
 #include <animalaudio/core/TextFormat.h>
-#include <animalaudio/ui/Panels.h>
 
 #include <cmath>
 
@@ -254,12 +253,33 @@ void MonkeydyneEditor::refresh()
 void MonkeydyneEditor::paint(juce::Graphics& g)
 {
     const auto& palette = theme.palette;
-    g.setGradientFill(juce::ColourGradient(palette.background.brighter(0.05f), 0.0f, kHeaderH, palette.background, 0.0f,
-                                           static_cast<float>(getHeight()), false));
-    g.fillAll();
-    animalaudio::ui::drawTitleBar(g, getLocalBounds().toFloat().withHeight(kHeaderH), theme);
+    const auto bounds = getLocalBounds().toFloat();
+    metal.paint(g, bounds, palette);
 
-    // Transfer: a coral ring breathes around the button while it records.
+    // Header: a glass strip under an iridescent hairline.
+    const auto header = bounds.withHeight(kHeaderH);
+    g.setGradientFill(juce::ColourGradient(palette.text.withAlpha(0.065f), 0.0f, 0.0f, palette.text.withAlpha(0.015f),
+                                           0.0f, kHeaderH, false));
+    g.fillRect(header);
+    g.setColour(juce::Colours::black.withAlpha(0.55f));
+    g.fillRect(header.withTop(kHeaderH - 1.0f));
+    g.setColour(palette.text.withAlpha(0.06f));
+    g.fillRect(header.withY(kHeaderH).withHeight(1.0f));
+    juce::ColourGradient hairline(palette.accent, 0.0f, 0.0f, palette.detail, header.getRight(), 0.0f, false);
+    hairline.addColour(0.5, palette.accentAlt);
+    g.setGradientFill(hairline);
+    g.fillRect(header.withHeight(2.0f));
+
+    const float mascot = kHeaderH - 16.0f;
+    theme.motif->drawMascot(g, {18.0f, 8.0f, mascot, mascot}, palette);
+    const float titleX = 28.0f + mascot;
+    ui::drawChromeText(g, theme.name, makeFont(26.0f, true, 0.14f), {titleX, 12.0f, 300.0f, 30.0f}, palette);
+    g.setColour(palette.textDim);
+    g.setFont(makeFont(10.5f, true, 0.3f));
+    g.drawText(theme.tagline, juce::Rectangle<float>(titleX + 1.0f, 42.0f, 360.0f, 14.0f),
+               juce::Justification::centredLeft, false);
+
+    // Transfer: a gold ring breathes around the button while it records.
     if (owner.isCapturing())
     {
         const float pulse =
@@ -272,10 +292,14 @@ void MonkeydyneEditor::paint(juce::Graphics& g)
     g.setFont(makeFont(12.0f, true, 0.16f));
     g.drawText(shownStatus, juce::Rectangle<float>(x, 20.0f, 330.0f, 15.0f), juce::Justification::centredLeft, false);
     const auto bar = juce::Rectangle<float>(x, 41.0f, 180.0f, 4.0f);
-    g.setColour(palette.outline);
-    g.fillRoundedRectangle(bar, 2.0f);
-    g.setColour(meter > 0.92f ? palette.accentAlt : palette.accent);
-    g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * meter), 2.0f);
+    ui::drawGlassWell(g, bar.expanded(1.5f), 3.5f, palette);
+    if (meter > 0.0f)
+    {
+        g.setGradientFill(juce::ColourGradient(palette.accent, bar.getX(), 0.0f,
+                                               meter > 0.92f ? palette.accentAlt : palette.accent.brighter(0.3f),
+                                               bar.getRight(), 0.0f, false));
+        g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * meter), 2.0f);
+    }
     g.setColour(palette.textDim);
     g.setFont(makeFont(8.5f, true, 0.2f));
     g.drawText("INPUT", juce::Rectangle<float>(bar.getRight() + 8.0f, 36.0f, 60.0f, 14.0f),

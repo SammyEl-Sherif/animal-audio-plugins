@@ -45,7 +45,7 @@ public:
     bool isFollowing() const noexcept { return follow; }
     /** Host playhead (song seconds) and the note audition position, from the editor's timer. */
     void setTransport(double hostSeconds, bool playing, std::uint32_t auditionTake, double auditionSample);
-    /** Clock for the background animation (vines and fireflies move with the host). */
+    /** Clock for the background animation (vines and gold dust move with the host). */
     void setAmbientTime(double seconds) { ambientTime = seconds; }
 
     // View -----------------------------------------------------------------------------------------------------------

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "EditController.h"
+#include "Glass.h"
 
 #include <animalaudio/ui/AccentKnob.h>
-#include <animalaudio/ui/PillButton.h>
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -84,10 +84,10 @@ private:
     animalaudio::ui::Theme theme;
     std::vector<Knob> knobs;
     animalaudio::ui::AccentKnob mixKnob;
-    animalaudio::ui::PillButton compareButton;
-    animalaudio::ui::PillButton keyDown;
-    animalaudio::ui::PillButton keyUp;
-    std::vector<std::unique_ptr<animalaudio::ui::PillButton>> modeButtons;
+    GlassButton compareButton;
+    GlassButton keyDown;
+    GlassButton keyUp;
+    std::vector<std::unique_ptr<GlassButton>> modeButtons;
     std::unique_ptr<juce::SliderParameterAttachment> mixAttachment;
     std::unique_ptr<juce::ButtonParameterAttachment> compareAttachment;
 

@@ -11,6 +11,7 @@ set(MONKEYDYNE_SOURCES
     Source/engine/StateCodec.cpp
     Source/engine/Worker.cpp
     Source/ui/EditController.cpp
+    Source/ui/Glass.cpp
     Source/ui/Inspector.cpp
     Source/ui/NoteCanvas.cpp
     Source/ui/Overview.cpp

@@ -1,5 +1,6 @@
 #include "NoteCanvas.h"
 
+#include "Glass.h"
 #include "dsp/Edits.h"
 
 #include <animalaudio/core/TextFormat.h>
@@ -20,6 +21,7 @@ using animalaudio::ui::makeFont;
 
 constexpr float kEdgeGrab = 5.0f;
 constexpr float kHandleRadius = 4.0f;
+constexpr float kScreenRadius = 10.0f;
 constexpr double kMinPixelsPerSecond = 8.0;
 constexpr double kMaxPixelsPerSecond = 4000.0;
 constexpr float kMinRow = 5.0f;
@@ -421,17 +423,19 @@ void NoteCanvas::paint(juce::Graphics& g)
 {
     const auto& palette = theme.palette;
     const auto bounds = getLocalBounds().toFloat();
-    animalaudio::ui::drawScreen(g, bounds, theme, ambientTime);
     {
         juce::Graphics::ScopedSaveState save(g);
         juce::Path clip;
-        clip.addRoundedRectangle(bounds, 8.0f);
+        clip.addRoundedRectangle(bounds, kScreenRadius);
         g.reduceClipRegion(clip);
+        g.setColour(palette.ambient);
+        g.fillRect(bounds);
 
         const auto area = noteArea();
         {
             juce::Graphics::ScopedSaveState inner(g);
             g.reduceClipRegion(area.toNearestInt());
+            theme.motif->drawAmbient(g, area, ambientTime, palette);
             paintGrid(g, area);
             if (controller.takes().empty())
                 paintEmpty(g);
@@ -468,15 +472,25 @@ void NoteCanvas::paint(juce::Graphics& g)
                     g.setColour(palette.accentAlt.withAlpha(0.9f));
                     g.fillRect(x - 0.6f, area.getY(), 1.2f, area.getHeight());
                 }
+
+            // The display sits behind glass: light pools on it from the upper left.
+            g.setGradientFill(juce::ColourGradient(palette.text.withAlpha(0.045f), area.getX(), area.getY(),
+                                                   palette.text.withAlpha(0.0f), area.getX() + area.getWidth() * 0.45f,
+                                                   area.getY(), true));
+            g.fillRect(area);
             paintStatus(g);
         }
         paintRuler(g);
         paintKeys(g);
-        g.setColour(palette.background);
+        g.setColour(palette.panel);
         g.fillRect(0.0f, 0.0f, kKeysWidth, kRulerHeight);
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(0.0f, kRulerHeight - 1.0f, kKeysWidth, 1.0f);
+        g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.4f), 0.0f, 0.0f,
+                                               juce::Colours::transparentBlack, 0.0f, 10.0f, false));
+        g.fillRect(bounds.withHeight(10.0f));
     }
-    g.setColour(palette.outline.darker(0.25f));
-    g.drawRoundedRectangle(bounds.reduced(0.5f), 8.0f, 1.0f);
+    drawBevel(g, bounds, kScreenRadius, palette, false);
 }
 
 void NoteCanvas::paintGrid(juce::Graphics& g, juce::Rectangle<float> area) const
@@ -607,12 +621,12 @@ void NoteCanvas::paintNotes(juce::Graphics& g, const TakeInfo& take, const dsp::
             g.fillPath(dashed);
             continue;
         }
-        const float lift = hot(ref) ? 0.12f : 0.0f;
-        g.setGradientFill(juce::ColourGradient(base.brighter(0.3f).withAlpha(0.82f + lift), 0.0f, cy - maxH,
-                                               base.darker(0.45f).withAlpha(0.74f + lift), 0.0f, cy + maxH, false));
-        g.fillPath(path);
-        g.setColour(base.brighter(0.6f).withAlpha(selected ? 0.95f : 0.4f + lift * 2.0f));
-        g.strokePath(path, juce::PathStrokeType(selected ? 1.4f : 1.0f));
+        if (selected || hot(ref))
+        {
+            g.setColour(base.withAlpha(selected ? 0.22f : 0.12f));
+            g.strokePath(path, juce::PathStrokeType(6.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+        fillTintedGlass(g, path, base, palette, hot(ref) || selected ? 1.0f : 0.88f);
     }
 
     // Separations: solid between separate notes, dotted where notes are linked.
@@ -736,7 +750,8 @@ void NoteCanvas::paintNotes(juce::Graphics& g, const TakeInfo& take, const dsp::
         const auto colour = palette.accentAlt.withAlpha(active ? 1.0f : 0.55f);
         if (a.shaped)
         {
-            g.setColour(colour);
+            g.setGradientFill(
+                juce::ColourGradient(colour.brighter(0.5f), c.x, c.y - r, colour.darker(0.25f), c.x, c.y + r, false));
             g.fillPath(diamond);
         }
         else
@@ -776,9 +791,12 @@ void NoteCanvas::paintRuler(juce::Graphics& g) const
         juce::Rectangle<float>(kKeysWidth, 0.0f, static_cast<float>(getWidth()) - kKeysWidth, kRulerHeight);
     juce::Graphics::ScopedSaveState save(g);
     g.reduceClipRegion(ruler.toNearestInt());
-    g.setGradientFill(juce::ColourGradient(palette.panelRaised, 0.0f, 0.0f, palette.panel, 0.0f, kRulerHeight, false));
+    g.setColour(palette.panel);
     g.fillRect(ruler);
-    g.setColour(palette.outline);
+    g.setGradientFill(juce::ColourGradient(palette.text.withAlpha(0.08f), 0.0f, 0.0f, palette.text.withAlpha(0.015f),
+                                           0.0f, kRulerHeight, false));
+    g.fillRect(ruler);
+    g.setColour(juce::Colours::black.withAlpha(0.6f));
     g.fillRect(ruler.getX(), ruler.getBottom() - 1.0f, ruler.getWidth(), 1.0f);
 
     for (const auto& take : controller.takes())
@@ -798,7 +816,7 @@ void NoteCanvas::paintRuler(juce::Graphics& g) const
     {
         const double t = static_cast<double>(k) * step;
         const float x = xForSeconds(t);
-        g.setColour(palette.outline.brighter(0.4f));
+        g.setColour(palette.textDim.withAlpha(0.45f));
         g.fillRect(x, ruler.getBottom() - 8.0f, 1.0f, 7.0f);
         g.setColour(palette.textDim);
         g.drawText(timeText(t, step), juce::Rectangle<float>(x + 4.0f, 3.0f, 60.0f, 12.0f),
@@ -821,6 +839,10 @@ void NoteCanvas::paintKeys(juce::Graphics& g) const
     juce::Graphics::ScopedSaveState save(g);
     g.reduceClipRegion(keys.toNearestInt());
     g.setColour(palette.panel);
+    g.fillRect(keys);
+    // Brushed-steel keys: light caught along their left, fading to the right.
+    g.setGradientFill(juce::ColourGradient(palette.text.withAlpha(0.06f), keys.getX(), 0.0f,
+                                           palette.text.withAlpha(0.0f), keys.getRight(), 0.0f, false));
     g.fillRect(keys);
 
     int highlighted = -1000;
@@ -846,8 +868,13 @@ void NoteCanvas::paintKeys(juce::Graphics& g) const
         }
         else
         {
-            g.setColour(palette.background.darker(0.3f));
-            g.fillRoundedRectangle(keys.getX(), top + 0.5f, keys.getWidth() * 0.6f, rowHeight - 1.0f, 2.0f);
+            // Black keys in polished onyx, a highlight along their upper edge.
+            const auto key = juce::Rectangle<float>(keys.getX(), top + 0.5f, keys.getWidth() * 0.6f, rowHeight - 1.0f);
+            g.setGradientFill(juce::ColourGradient(palette.panelRaised, 0.0f, key.getY(),
+                                                   palette.background.darker(0.4f), 0.0f, key.getBottom(), false));
+            g.fillRoundedRectangle(key, 2.0f);
+            g.setColour(palette.text.withAlpha(0.12f));
+            g.fillRect(key.getX(), key.getY() + 0.5f, key.getWidth() - 2.0f, 0.8f);
         }
         if (n == highlighted)
         {
@@ -946,8 +973,7 @@ void NoteCanvas::paintStatus(juce::Graphics& g) const
     const auto box = juce::Rectangle<float>(area.getX() + 8.0f, area.getBottom() - 26.0f, width, 18.0f);
     g.setColour(palette.background.withAlpha(0.82f));
     g.fillRoundedRectangle(box, 9.0f);
-    g.setColour(palette.outline);
-    g.drawRoundedRectangle(box.reduced(0.5f), 9.0f, 1.0f);
+    drawBevel(g, box, 9.0f, palette, true);
     g.setColour(palette.text);
     g.setFont(font);
     g.drawText(text, box, juce::Justification::centred, false);

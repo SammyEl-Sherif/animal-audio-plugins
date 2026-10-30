@@ -2,13 +2,13 @@
 
 #include "MonkeydyneProcessor.h"
 #include "ui/EditController.h"
+#include "ui/Glass.h"
 #include "ui/Inspector.h"
+#include "ui/MonkeydyneTheme.h"
 #include "ui/NoteCanvas.h"
 #include "ui/Overview.h"
-#include "ui/MonkeydyneTheme.h"
 
 #include <animalaudio/ui/BrandBadge.h>
-#include <animalaudio/ui/PillButton.h>
 
 namespace monkeydyne
 {
@@ -53,19 +53,20 @@ private:
     ui::Overview overview;
     ui::Inspector inspector;
 
-    animalaudio::ui::PillButton transferButton;
-    animalaudio::ui::PillButton editTool;
-    animalaudio::ui::PillButton cutTool;
-    animalaudio::ui::PillButton noteGranularity;
-    animalaudio::ui::PillButton wordGranularity;
-    animalaudio::ui::PillButton phraseGranularity;
-    animalaudio::ui::PillButton undoButton;
-    animalaudio::ui::PillButton redoButton;
-    animalaudio::ui::PillButton followButton;
-    animalaudio::ui::PillButton fitButton;
-    animalaudio::ui::PillButton zoomOutButton;
-    animalaudio::ui::PillButton zoomInButton;
-    animalaudio::ui::PillButton clearButton;
+    ui::BrushedMetal metal;
+    ui::GlassButton transferButton;
+    ui::GlassButton editTool;
+    ui::GlassButton cutTool;
+    ui::GlassButton noteGranularity;
+    ui::GlassButton wordGranularity;
+    ui::GlassButton phraseGranularity;
+    ui::GlassButton undoButton;
+    ui::GlassButton redoButton;
+    ui::GlassButton followButton;
+    ui::GlassButton fitButton;
+    ui::GlassButton zoomOutButton;
+    ui::GlassButton zoomInButton;
+    ui::GlassButton clearButton;
 
     juce::String shownStatus;
     float meter = 0.0f;
