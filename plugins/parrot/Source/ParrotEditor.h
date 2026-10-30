@@ -2,8 +2,8 @@
 
 #include "ParrotProcessor.h"
 #include "ui/ParrotTheme.h"
-#include "ui/ParrotWidgets.h"
 
+#include <animalaudio/ui/AccentKnob.h>
 #include <animalaudio/ui/BrandBadge.h>
 #include <animalaudio/ui/ChoicePillRow.h>
 #include <animalaudio/ui/PillButton.h>
@@ -56,11 +56,11 @@ private:
     ParrotProcessor& owner;
     animalaudio::ui::Theme theme;
     animalaudio::ui::BrandBadge brand;
-    ui::ParrotKnob pitchKnob;
-    ui::ParrotKnob formantKnob;
-    ui::ParrotKnob glideKnob;
-    ui::ParrotKnob driveKnob;
-    ui::ParrotKnob mixKnob;
+    animalaudio::ui::AccentKnob pitchKnob;
+    animalaudio::ui::AccentKnob formantKnob;
+    animalaudio::ui::AccentKnob glideKnob;
+    animalaudio::ui::AccentKnob driveKnob;
+    animalaudio::ui::AccentKnob mixKnob;
     animalaudio::ui::PillButton fineButton;
     animalaudio::ui::PillButton linkButton;
     animalaudio::ui::PillButton noteDown;

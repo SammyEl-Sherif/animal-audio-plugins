@@ -6,11 +6,13 @@ add_library(animalaudio_ui INTERFACE)
 add_library(animalaudio::ui ALIAS animalaudio_ui)
 target_include_directories(animalaudio_ui INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_sources(animalaudio_ui INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/AccentKnob.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/BrandBadge.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ChoicePillRow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CurveEditor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CurvePresetPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Drawing.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Panels.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PillButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/RotaryKnob.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ShaperEditor.cpp

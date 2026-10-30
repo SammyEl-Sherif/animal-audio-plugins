@@ -2,6 +2,7 @@
 
 #include "VoiceShifter.h"
 
+#include <animalaudio/dsp/Notes.h>
 #include <animalaudio/dsp/Smoothing.h>
 #include <animalaudio/dsp/TubeDrive.h>
 
@@ -28,8 +29,8 @@ inline constexpr int kDefaultNote = 48; // C3
 inline constexpr float kMaxShift = 12.0f;
 inline constexpr float kMaxGlideMs = 500.0f;
 
-std::string noteName(int midiNote);
-float hzToMidi(float hz) noexcept;
+using animalaudio::dsp::hzToMidi;
+using animalaudio::dsp::noteName;
 
 /** PITCH as applied: whole semitones unless FINE. */
 inline float appliedPitch(float pitch, bool fine) noexcept

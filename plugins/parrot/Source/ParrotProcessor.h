@@ -2,6 +2,8 @@
 
 #include "dsp/ParrotEngine.h"
 
+#include <animalaudio/core/TextFormat.h>
+
 #include <juce_audio_processors/juce_audio_processors.h>
 
 namespace parrot
@@ -20,7 +22,7 @@ inline const juce::ParameterID mix{"mix", 1};
 } // namespace ids
 
 /** "+7 st", "-3.25 st", "0 st". */
-juce::String formatSemitones(float semitones);
+using animalaudio::core::formatSemitones;
 
 class ParrotProcessor : public juce::AudioProcessor
 {

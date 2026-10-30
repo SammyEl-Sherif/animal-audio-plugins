@@ -1,18 +1,26 @@
-#include "ParrotWidgets.h"
+#include <animalaudio/ui/AccentKnob.h>
 
 #include <cmath>
 
-namespace parrot::ui
+namespace animalaudio::ui
 {
-ParrotKnob::ParrotKnob(const animalaudio::ui::Theme& themeToUse, juce::Colour arcColour, bool isBipolar)
-    : animalaudio::ui::RotaryKnob(themeToUse.palette)
+AccentKnob::AccentKnob(const Theme& themeToUse, juce::Colour arcColour, bool isBipolar)
+    : RotaryKnob(themeToUse.palette)
     , theme(themeToUse)
     , colour(arcColour)
     , bipolar(isBipolar)
 {
 }
 
-void ParrotKnob::paint(juce::Graphics& g)
+void AccentKnob::setArcColour(juce::Colour newColour)
+{
+    if (newColour == colour)
+        return;
+    colour = newColour;
+    repaint();
+}
+
+void AccentKnob::paint(juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat().reduced(3.0f);
     const float outer = std::min(bounds.getWidth(), bounds.getHeight()) * 0.5f;
@@ -65,4 +73,4 @@ void ParrotKnob::paint(juce::Graphics& g)
         g.drawEllipse(bounds.reduced(0.5f), 1.0f);
     }
 }
-} // namespace parrot::ui
+} // namespace animalaudio::ui

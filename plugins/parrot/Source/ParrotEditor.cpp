@@ -1,6 +1,8 @@
 #include "ParrotEditor.h"
 
 #include <animalaudio/core/BuildStamp.h>
+#include <animalaudio/core/TextFormat.h>
+#include <animalaudio/ui/Panels.h>
 
 #include <algorithm>
 #include <cmath>
@@ -9,6 +11,8 @@ namespace parrot
 {
 namespace
 {
+using animalaudio::core::formatCents;
+using animalaudio::core::joinWithDots;
 using animalaudio::ui::makeFont;
 
 constexpr float kHeaderH = 68.0f;
@@ -26,23 +30,6 @@ juce::String noteText(int midiNote)
     return juce::String(dsp::noteName(midiNote));
 }
 
-juce::String withDots(std::initializer_list<juce::String> parts)
-{
-    static const juce::String separator(juce::CharPointer_UTF8("  \xc2\xb7  "));
-    juce::StringArray all;
-    for (const auto& part : parts)
-        all.add(part);
-    return all.joinIntoString(separator);
-}
-
-juce::String centsText(int cents)
-{
-    return (cents > 0   ? "+"
-            : cents < 0 ? "-"
-                        : juce::String(juce::CharPointer_UTF8("\xc2\xb1"))) +
-           juce::String(std::abs(cents)) + juce::String(juce::CharPointer_UTF8("\xc2\xa2"));
-}
-
 juce::String intervalName(float semitones)
 {
     static const char* const names[] = {"UNISON",      "MINOR 2ND", "MAJOR 2ND",   "MINOR 3RD", "MAJOR 3RD",
@@ -54,7 +41,7 @@ juce::String intervalName(float semitones)
         name << (whole > 0 ? " UP" : " DOWN");
     const int cents = juce::roundToInt((semitones - static_cast<float>(whole)) * 100.0f);
     if (cents != 0)
-        name << "  " << centsText(cents);
+        name << "  " << formatCents(cents);
     return name;
 }
 
@@ -233,51 +220,13 @@ void ParrotEditor::refresh()
 
 void ParrotEditor::paintHeader(juce::Graphics& g) const
 {
-    const auto& palette = theme.palette;
-    const auto header = getLocalBounds().toFloat().removeFromTop(kHeaderH);
-    g.setGradientFill(juce::ColourGradient(palette.panel, 0.0f, 0.0f, palette.background, 0.0f, kHeaderH, false));
-    g.fillRect(header);
-
-    juce::ColourGradient stripe(palette.accent, 0.0f, 0.0f, palette.detail, header.getWidth(), 0.0f, false);
-    stripe.addColour(0.55, palette.accentAlt);
-    g.setGradientFill(stripe);
-    g.fillRect(header.withHeight(3.0f));
-    g.setColour(palette.outline);
-    g.fillRect(header.withTop(kHeaderH - 1.0f));
-
-    theme.motif->drawMascot(g, {18.0f, 9.0f, 52.0f, 52.0f}, palette);
-
-    g.setColour(palette.text);
-    g.setFont(makeFont(26.0f, true, 0.14f));
-    g.drawText(theme.name, juce::Rectangle<float>(80.0f, 12.0f, 300.0f, 30.0f), juce::Justification::centredLeft,
-               false);
-    g.setColour(palette.textDim);
-    g.setFont(makeFont(10.5f, true, 0.3f));
-    g.drawText(theme.tagline, juce::Rectangle<float>(81.0f, 42.0f, 360.0f, 14.0f), juce::Justification::centredLeft,
-               false);
+    animalaudio::ui::drawTitleBar(g, getLocalBounds().toFloat().removeFromTop(kHeaderH), theme);
 }
 
 void ParrotEditor::paintPanel(juce::Graphics& g, juce::Rectangle<float> area, const juce::String& title,
                               juce::Colour key) const
 {
-    const auto& palette = theme.palette;
-    constexpr float radius = 8.0f;
-    g.setColour(juce::Colours::black.withAlpha(0.38f));
-    g.fillRoundedRectangle(area.translated(0.0f, 2.0f), radius);
-    g.setGradientFill(juce::ColourGradient(palette.panel.brighter(0.05f), 0.0f, area.getY(), palette.panel.darker(0.1f),
-                                           0.0f, area.getBottom(), false));
-    g.fillRoundedRectangle(area, radius);
-    g.setColour(palette.outline);
-    g.drawRoundedRectangle(area.reduced(0.5f), radius, 1.0f);
-    g.setColour(palette.text.withAlpha(0.05f));
-    g.fillRect(area.getX() + radius, area.getY() + 1.0f, area.getWidth() - 2.0f * radius, 1.0f);
-
-    const auto row = juce::Rectangle<float>(area.getX() + 18.0f, area.getY() + 14.0f, area.getWidth() - 36.0f, 14.0f);
-    g.setColour(key);
-    g.fillEllipse(juce::Rectangle<float>(7.0f, 7.0f).withCentre({row.getX() + 3.5f, row.getCentreY()}));
-    g.setColour(palette.textDim);
-    g.setFont(makeFont(11.0f, true, 0.24f));
-    g.drawText(title, row.withTrimmedLeft(15.0f), juce::Justification::centredLeft, false);
+    animalaudio::ui::drawPanel(g, area, title, key, theme.palette);
 }
 
 void ParrotEditor::paintKnobPanel(juce::Graphics& g, juce::Rectangle<float> area, const juce::String& title,
@@ -299,24 +248,7 @@ void ParrotEditor::paintDisplay(juce::Graphics& g, juce::Rectangle<float> area) 
 {
     const auto& palette = theme.palette;
     const auto& engine = owner.getEngine();
-    constexpr float radius = 8.0f;
-
-    g.setColour(juce::Colours::black.withAlpha(0.45f));
-    g.fillRoundedRectangle(area.translated(0.0f, 2.0f), radius);
-    {
-        juce::Graphics::ScopedSaveState save(g);
-        juce::Path clip;
-        clip.addRoundedRectangle(area, radius);
-        g.reduceClipRegion(clip);
-        g.setColour(palette.ambient);
-        g.fillRect(area);
-        theme.motif->drawAmbient(g, area, 0.0, palette);
-        g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.45f), 0.0f, area.getY(),
-                                               juce::Colours::transparentBlack, 0.0f, area.getY() + 18.0f, false));
-        g.fillRect(area.withHeight(18.0f));
-    }
-    g.setColour(palette.outline.darker(0.25f));
-    g.drawRoundedRectangle(area.reduced(0.5f), radius, 1.0f);
+    animalaudio::ui::drawScreen(g, area, theme);
 
     // Readout: detected note -> sung note, and the formant shift.
     const bool live = silentFrames < 12;
@@ -341,7 +273,7 @@ void ParrotEditor::paintDisplay(juce::Graphics& g, juce::Rectangle<float> area) 
         g.drawText(name, line, juce::Justification::centredLeft, false);
         g.setColour(palette.textDim.withAlpha(live ? 1.0f : 0.4f));
         g.setFont(makeFont(11.0f, true, 0.04f));
-        g.drawText(centsText(juce::roundToInt((midi - static_cast<float>(note)) * 100.0f)),
+        g.drawText(formatCents(juce::roundToInt((midi - static_cast<float>(note)) * 100.0f)),
                    line.withTrimmedLeft(juce::GlyphArrangement::getStringWidth(big, name) + 6.0f).withTrimmedTop(6.0f),
                    juce::Justification::centredLeft, false);
     };
@@ -376,25 +308,7 @@ void ParrotEditor::paintDisplay(juce::Graphics& g, juce::Rectangle<float> area) 
         g.fillRect(roll);
         const int lowest = static_cast<int>(std::floor(viewCentre - kRollSpan * 0.5f)) - 1;
         const int highest = static_cast<int>(std::ceil(viewCentre + kRollSpan * 0.5f)) + 1;
-        for (int n = lowest; n <= highest; ++n)
-        {
-            const int pc = ((n % 12) + 12) % 12;
-            const float rowTop = yOf(static_cast<float>(n) + 0.5f);
-            if (pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10)
-            {
-                g.setColour(palette.text.withAlpha(0.03f));
-                g.fillRect(roll.getX(), rowTop, roll.getWidth(), rowH);
-            }
-            if (pc == 0)
-            {
-                g.setColour(palette.outline.withAlpha(0.9f));
-                g.fillRect(roll.getX(), rowTop + rowH - 0.5f, roll.getWidth(), 1.0f);
-                g.setColour(palette.textDim.withAlpha(0.75f));
-                g.setFont(makeFont(9.0f, true, 0.06f));
-                g.drawText(noteText(n), juce::Rectangle<float>(roll.getX() + 5.0f, rowTop - 2.0f, 34.0f, rowH + 4.0f),
-                           juce::Justification::centredLeft, false);
-            }
-        }
+        animalaudio::ui::drawSemitoneRows(g, roll, yOf, lowest, highest, rowH, palette, true);
 
         if (owner.getMode() == dsp::Mode::Robot)
         {
@@ -458,14 +372,15 @@ void ParrotEditor::paintDisplay(juce::Graphics& g, juce::Rectangle<float> area) 
     const auto mode = owner.getMode();
     juce::String status;
     if (mode == dsp::Mode::Shift)
-        status = withDots({"SHIFT", formatSemitones(pitch).toUpperCase()});
+        status = joinWithDots({"SHIFT", formatSemitones(pitch).toUpperCase()});
     else if (mode == dsp::Mode::Snap)
-        status = withDots({"SNAP", "CHROMATIC", formatSemitones(pitch).toUpperCase()});
+        status = joinWithDots({"SNAP", "CHROMATIC", formatSemitones(pitch).toUpperCase()});
     else if (engine.getHeldNote() >= 0)
-        status = withDots({"ROBOT", "MIDI " + noteText(engine.getHeldNote()), formatSemitones(pitch).toUpperCase()});
+        status =
+            joinWithDots({"ROBOT", "MIDI " + noteText(engine.getHeldNote()), formatSemitones(pitch).toUpperCase()});
     else
-        status = withDots({"ROBOT", noteText(dsp::kLowestNote + juce::roundToInt(value(ids::note))),
-                           formatSemitones(pitch).toUpperCase()});
+        status = joinWithDots({"ROBOT", noteText(dsp::kLowestNote + juce::roundToInt(value(ids::note))),
+                               formatSemitones(pitch).toUpperCase()});
     const auto footer =
         juce::Rectangle<float>(area.getX() + 18.0f, area.getBottom() - 26.0f, area.getWidth() - 36.0f, 14.0f);
     g.setFont(makeFont(10.0f, true, 0.16f));

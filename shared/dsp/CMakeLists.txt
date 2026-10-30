@@ -9,12 +9,13 @@ if(AA_BUILD_TESTS)
         tests/CurveGainShaperTests.cpp
         tests/OversamplerTests.cpp
         tests/PitchTrackerTests.cpp
+        tests/PsolaTests.cpp
         tests/ShapeCurveTests.cpp
         tests/StandardPresetsTests.cpp
         tests/SmoothingTests.cpp
         tests/TempoSyncTests.cpp
         tests/TubeDriveTests.cpp)
-    # SignalProbe.h (shared/testing) is JUCE-free; only its include path is needed here.
+    # SignalProbe.h and VoiceSynth.h (shared/testing) are JUCE-free; only their include path is needed here.
     target_include_directories(animalaudio_dsp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../testing/include)
     target_link_libraries(animalaudio_dsp_tests PRIVATE animalaudio::dsp Catch2::Catch2WithMain)
     catch_discover_tests(animalaudio_dsp_tests TEST_PREFIX "dsp.")

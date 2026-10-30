@@ -1,5 +1,6 @@
 #include <animalaudio/dsp/PitchTracker.h>
 #include <animalaudio/testing/SignalProbe.h>
+#include <animalaudio/testing/VoiceSynth.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -11,6 +12,7 @@
 using animalaudio::dsp::PitchTracker;
 using animalaudio::testing::centsBetween;
 using animalaudio::testing::kPi;
+using animalaudio::testing::vowel;
 
 namespace
 {
@@ -143,28 +145,8 @@ TEST_CASE("PitchTracker does not jump to a harmonic that sits on a formant durin
         const double slide = std::clamp((position - static_cast<double>(index)) * 5.0 - 4.0, 0.0, 1.0);
         return notes[index] + (notes[index + 1] - notes[index]) * slide + 0.3 * std::sin(2.0 * kPi * 5.5 * t);
     };
-    auto envelope = [](double f)
-    {
-        static constexpr double formants[][3] = {{730.0, 90.0, 1.0}, {1090.0, 110.0, 0.5}, {2440.0, 170.0, 0.25}};
-        double a = 0.02;
-        for (const auto& formant : formants)
-        {
-            const double x = (f - formant[0]) / (0.5 * formant[1]);
-            a += formant[2] / (1.0 + x * x);
-        }
-        return a;
-    };
-    std::vector<float> signal(static_cast<std::size_t>(rate * 1.5));
-    double phase = 0.0;
-    for (std::size_t i = 0; i < signal.size(); ++i)
-    {
-        const double f0 = 440.0 * std::pow(2.0, (midiAt(static_cast<double>(i) / rate) - 69.0) / 12.0);
-        phase += 2.0 * kPi * f0 / rate;
-        double v = 0.0;
-        for (int k = 1; k * f0 < 6000.0; ++k)
-            v += envelope(k * f0) * std::sin(k * phase);
-        signal[i] = static_cast<float>(0.05 * v);
-    }
+    const auto signal =
+        vowel([&](double t) { return 440.0 * std::pow(2.0, (midiAt(t) - 69.0) / 12.0); }, 1.5, rate, 0.25f);
 
     PitchTracker tracker;
     tracker.prepare(rate);

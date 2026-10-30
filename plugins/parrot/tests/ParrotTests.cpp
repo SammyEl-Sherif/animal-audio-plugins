@@ -5,6 +5,7 @@
 #include <animalaudio/core/BuildStamp.h>
 #include <animalaudio/testing/SignalProbe.h>
 #include <animalaudio/testing/TestKit.h>
+#include <animalaudio/testing/VoiceSynth.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -18,10 +19,13 @@
 #include <vector>
 
 using animalaudio::testing::centsBetween;
+using animalaudio::testing::envelopeDb;
+using animalaudio::testing::formantShift;
 using animalaudio::testing::kPi;
 using animalaudio::testing::peakFrequency;
 using animalaudio::testing::rms;
 using animalaudio::testing::toneAmplitude;
+using animalaudio::testing::vowel;
 using animalaudio::testing::writePngIfRequested;
 using parrot::dsp::Mode;
 using parrot::dsp::ParrotEngine;
@@ -29,44 +33,6 @@ using parrot::dsp::ParrotEngine;
 namespace
 {
 constexpr double kRate = 48000.0;
-
-/** Vowel /a/: harmonics of `pitchHz(t)` under three formant resonances (Peterson & Barney, adult male). */
-std::vector<float> vowel(const std::function<double(double)>& pitchHz, double seconds, double rate = kRate,
-                         float peak = 0.5f)
-{
-    struct Formant
-    {
-        double hz, bandwidth, gain;
-    };
-    static constexpr Formant formants[] = {{730.0, 90.0, 1.0}, {1090.0, 110.0, 0.5}, {2440.0, 170.0, 0.25}};
-    auto envelope = [](double f)
-    {
-        double a = 0.0;
-        for (const auto& formant : formants)
-        {
-            const double x = (f - formant.hz) / (0.5 * formant.bandwidth);
-            a += formant.gain / (1.0 + x * x);
-        }
-        return a + 0.02;
-    };
-    const auto count = static_cast<std::size_t>(seconds * rate);
-    std::vector<float> out(count);
-    double phase = 0.0;
-    float largest = 0.0f;
-    for (std::size_t i = 0; i < count; ++i)
-    {
-        const double f0 = pitchHz(static_cast<double>(i) / rate);
-        phase += 2.0 * kPi * f0 / rate;
-        double v = 0.0;
-        for (int k = 1; k * f0 < 0.45 * rate && k * f0 < 6000.0; ++k)
-            v += envelope(k * f0) * std::sin(k * phase);
-        out[i] = static_cast<float>(v);
-        largest = std::max(largest, std::abs(out[i]));
-    }
-    for (auto& v : out)
-        v *= peak / largest;
-    return out;
-}
 
 std::vector<float> steadyVowel(double hz, double seconds, double rate = kRate)
 {
@@ -120,57 +86,6 @@ std::vector<float> process(const Settings& settings, const std::vector<float>& i
     apply(engine, settings);
     engine.prepare(rate);
     return render(engine, input, blockSize);
-}
-
-/** Spectral envelope in dB on a quarter-semitone grid (300 Hz .. 4 kHz), from the harmonics of `f0`. */
-std::vector<double> envelopeDb(const std::vector<float>& x, std::size_t begin, std::size_t count, double f0)
-{
-    std::vector<double> freqs;
-    std::vector<double> levels;
-    for (int k = 1; k * f0 < 6000.0; ++k)
-    {
-        freqs.push_back(std::log2(k * f0));
-        levels.push_back(20.0 * std::log10(toneAmplitude(x, begin, count, k * f0, kRate) + 1.0e-9));
-    }
-    std::vector<double> grid;
-    for (double f = std::log2(300.0); f <= std::log2(4000.0); f += 1.0 / 48.0)
-    {
-        std::size_t i = 1;
-        while (i + 1 < freqs.size() && freqs[i] < f)
-            ++i;
-        const double t = std::clamp((f - freqs[i - 1]) / (freqs[i] - freqs[i - 1]), 0.0, 1.0);
-        grid.push_back(levels[i - 1] + t * (levels[i] - levels[i - 1]));
-    }
-    return grid;
-}
-
-/** How many semitones the output's formants moved relative to the input's (best envelope alignment). */
-double formantShift(const std::vector<double>& input, const std::vector<double>& output)
-{
-    double best = 0.0;
-    double bestScore = -1.0e300;
-    for (int shift = -14 * 4; shift <= 14 * 4; ++shift)
-    {
-        double sum = 0.0;
-        int n = 0;
-        for (int i = 0; i < static_cast<int>(output.size()); ++i)
-        {
-            const int j = i - shift;
-            if (j < 0 || j >= static_cast<int>(input.size()))
-                continue;
-            sum += -std::abs(output[static_cast<std::size_t>(i)] - input[static_cast<std::size_t>(j)]);
-            ++n;
-        }
-        if (n < static_cast<int>(output.size()) / 3)
-            continue;
-        const double score = sum / n;
-        if (score > bestScore)
-        {
-            bestScore = score;
-            best = shift / 4.0;
-        }
-    }
-    return best;
 }
 
 /** Tail of a render, after latency and settling. */
@@ -229,7 +144,7 @@ TEST_CASE("parrot: formants stay put unless FORMANT or LINK moves them")
 {
     const auto input = steadyVowel(120.0, 1.5);
     const auto inTail = tailOf(input);
-    const auto reference = envelopeDb(input, inTail.begin, inTail.count, 120.0);
+    const auto reference = envelopeDb(input, inTail.begin, inTail.count, 120.0, kRate);
 
     auto shiftFor = [&](float pitch, float formant, bool link)
     {
@@ -239,7 +154,8 @@ TEST_CASE("parrot: formants stay put unless FORMANT or LINK moves them")
         s.link = link;
         const auto out = process(s, input);
         const auto tail = tailOf(out);
-        return formantShift(reference, envelopeDb(out, tail.begin, tail.count, 120.0 * std::pow(2.0, pitch / 12.0)));
+        return formantShift(reference,
+                            envelopeDb(out, tail.begin, tail.count, 120.0 * std::pow(2.0, pitch / 12.0), kRate));
     };
 
     const double pitchUp = shiftFor(7.0f, 0.0f, false);
@@ -301,7 +217,7 @@ TEST_CASE("parrot: robot flattens vibrato onto the note")
     Settings s;
     s.mode = Mode::Robot;
     const auto input =
-        vowel([](double t) { return 196.0 * std::pow(2.0, 0.5 / 12.0 * std::sin(2.0 * kPi * 5.5 * t)); }, 1.5);
+        vowel([](double t) { return 196.0 * std::pow(2.0, 0.5 / 12.0 * std::sin(2.0 * kPi * 5.5 * t)); }, 1.5, kRate);
     const auto out = process(s, input);
     const auto tail = tailOf(out);
     const double c3 = 440.0 * std::pow(2.0, (48 - 69) / 12.0);
@@ -450,7 +366,7 @@ TEST_CASE("parrot: block size does not change the render")
     s.pitch = 5.0f;
     s.formant = -3.0f;
     s.drive = 0.4f;
-    const auto input = vowel([](double t) { return 180.0 + 40.0 * t; }, 0.8);
+    const auto input = vowel([](double t) { return 180.0 + 40.0 * t; }, 0.8, kRate);
     const auto a = process(s, input, kRate, 1);
     const auto b = process(s, input, kRate, 512);
     const auto c = process(s, input, kRate, 37);
@@ -581,7 +497,7 @@ TEST_CASE("parrot: editor renders headlessly")
                                 0.3 * std::sin(2.0 * kPi * 5.5 * t) * std::min(1.0, t);
             return 440.0 * std::pow(2.0, (note - 69.0) / 12.0);
         },
-        3.4);
+        3.4, kRate);
     juce::AudioBuffer<float> block(2, 512);
     for (std::size_t done = 0; done + 512 <= phrase.size(); done += 512)
     {

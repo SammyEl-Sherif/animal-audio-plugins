@@ -2,18 +2,6 @@
 
 namespace parrot::dsp
 {
-std::string noteName(int midiNote)
-{
-    static constexpr const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-    const int octave = midiNote / 12 - 1;
-    return std::string(names[((midiNote % 12) + 12) % 12]) + std::to_string(octave);
-}
-
-float hzToMidi(float hz) noexcept
-{
-    return 69.0f + 12.0f * std::log2(hz / 440.0f);
-}
-
 void ParrotEngine::prepare(double sampleRate)
 {
     rate = sampleRate;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Yin.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -51,8 +53,7 @@ public:
         normalised.assign(static_cast<std::size_t>(maxLag + 2), 1.0f);
 
         const double cutoff = std::min(0.25 * coarseRate, 0.45 * sampleRate);
-        sections[0] = Biquad::lowpass(sampleRate, cutoff, 0.54119610);
-        sections[1] = Biquad::lowpass(sampleRate, cutoff, 1.30656296);
+        sections = yin::antiAliasLowpass(sampleRate, cutoff);
         reset();
     }
 
@@ -100,49 +101,12 @@ public:
     int getCentreLag() const noexcept { return (span * decimation) / 2 + decimation; }
 
 private:
-    struct Biquad
-    {
-        double b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;
-        double z1 = 0.0, z2 = 0.0;
-
-        static Biquad lowpass(double sampleRate, double cutoff, double q)
-        {
-            const double w0 = 2.0 * 3.14159265358979323846 * cutoff / sampleRate;
-            const double alpha = std::sin(w0) / (2.0 * q);
-            const double cosw = std::cos(w0);
-            const double a0 = 1.0 + alpha;
-            Biquad b;
-            b.b0 = (1.0 - cosw) * 0.5 / a0;
-            b.b1 = (1.0 - cosw) / a0;
-            b.b2 = b.b0;
-            b.a1 = -2.0 * cosw / a0;
-            b.a2 = (1.0 - alpha) / a0;
-            return b;
-        }
-
-        double process(double x) noexcept
-        {
-            const double y = b0 * x + z1;
-            z1 = b1 * x - a1 * y + z2;
-            z2 = b2 * x - a2 * y;
-            return y;
-        }
-    };
-
     static std::size_t nextPowerOfTwo(int n)
     {
         std::size_t size = 1;
         while (size < static_cast<std::size_t>(n))
             size <<= 1;
         return size;
-    }
-
-    static float parabolicOffset(float left, float mid, float right) noexcept
-    {
-        const float denominator = left - 2.0f * mid + right;
-        if (denominator <= 1.0e-12f)
-            return 0.0f;
-        return std::clamp(0.5f * (left - right) / denominator, -0.5f, 0.5f);
     }
 
     void analyse() noexcept
@@ -158,26 +122,8 @@ private:
         }
         const float rms = static_cast<float>(std::sqrt(energy / span));
 
-        for (int tau = 1; tau <= maxLag + 1; ++tau)
-        {
-            float sum = 0.0f;
-            for (int j = 0; j < window; ++j)
-            {
-                const float delta = linear[static_cast<std::size_t>(j)] - linear[static_cast<std::size_t>(j + tau)];
-                sum += delta * delta;
-            }
-            difference[static_cast<std::size_t>(tau)] = sum;
-        }
-        normalised[0] = 1.0f;
-        double running = 0.0;
-        for (int tau = 1; tau <= maxLag + 1; ++tau)
-        {
-            running += difference[static_cast<std::size_t>(tau)];
-            normalised[static_cast<std::size_t>(tau)] =
-                running > 0.0
-                    ? static_cast<float>(static_cast<double>(difference[static_cast<std::size_t>(tau)]) * tau / running)
-                    : 1.0f;
-        }
+        yin::difference(linear.data(), window, maxLag, difference.data());
+        yin::normalise(difference.data(), maxLag, normalised.data());
 
         int best = -1;
         for (int tau = minLag; tau <= maxLag; ++tau)
@@ -205,9 +151,9 @@ private:
 
         const float aperiodicity = normalised[static_cast<std::size_t>(best)];
         const float coarseLag =
-            static_cast<float>(best) + parabolicOffset(normalised[static_cast<std::size_t>(best - 1)],
-                                                       normalised[static_cast<std::size_t>(best)],
-                                                       normalised[static_cast<std::size_t>(best + 1)]);
+            static_cast<float>(best) + yin::parabolicOffset(normalised[static_cast<std::size_t>(best - 1)],
+                                                            normalised[static_cast<std::size_t>(best)],
+                                                            normalised[static_cast<std::size_t>(best + 1)]);
         const std::int64_t centre = (start + span / 2) * decimation + decimation - 1;
         float period = coarseLag * static_cast<float>(decimation);
         if (decimation > 1)
@@ -236,18 +182,7 @@ private:
         current.voiced = voiced;
     }
 
-    /** Depth of the dip at `tau`: the minimum of the parabola through its neighbours, so a period that falls
-        between two lags is not judged shallower than one that lands on a lag. */
-    float dipDepth(int tau) const noexcept
-    {
-        const float left = normalised[static_cast<std::size_t>(tau - 1)];
-        const float mid = normalised[static_cast<std::size_t>(tau)];
-        const float right = normalised[static_cast<std::size_t>(tau + 1)];
-        const float curvature = left - 2.0f * mid + right;
-        if (curvature <= 1.0e-12f)
-            return mid;
-        return std::max(0.0f, mid - 0.125f * (left - right) * (left - right) / curvature);
-    }
+    float dipDepth(int tau) const noexcept { return yin::dipDepth(normalised.data(), tau); }
 
     /**
      * The first dip under the threshold can be a harmonic's period when the true period's dip is shallower than
@@ -304,7 +239,7 @@ private:
         }
         if (best == 0 || best == lags - 1)
             return guess;
-        return static_cast<float>(low + best) + parabolicOffset(values[best - 1], values[best], values[best + 1]);
+        return static_cast<float>(low + best) + yin::parabolicOffset(values[best - 1], values[best], values[best + 1]);
     }
 
     int decimation = 4;
@@ -319,7 +254,7 @@ private:
     std::vector<float> linear;
     std::vector<float> difference;
     std::vector<float> normalised;
-    std::array<Biquad, 2> sections{};
+    std::array<yin::Biquad, 2> sections{};
 
     std::int64_t written = 0;
     std::int64_t coarseWritten = 0;

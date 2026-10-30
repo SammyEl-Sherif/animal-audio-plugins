@@ -38,12 +38,6 @@ void VoiceShifter::prepare(double sampleRate)
     for (auto& channel : history)
         channel.assign(size, 0.0f);
     mono.assign(size, 0.0f);
-
-    for (int i = 0; i < kWindowSize + 2; ++i)
-    {
-        const double u = std::min(i, kWindowSize) / static_cast<double>(kWindowSize);
-        hann[static_cast<std::size_t>(i)] = static_cast<float>(0.5 * (1.0 + std::cos(3.14159265358979323846 * u)));
-    }
     reset();
 }
 
@@ -93,80 +87,9 @@ const VoiceShifter::Estimate& VoiceShifter::estimateNear(std::int64_t position) 
     return estimates[static_cast<std::size_t>(best % kEstimateSlots)];
 }
 
-double VoiceShifter::alignToPrevious(double previous, double guess, float period) const noexcept
-{
-    const int length = std::max(2, static_cast<int>(std::lround(period)));
-    const int radius = std::max(1, static_cast<int>(std::lround(period * 0.125f)));
-    // Compare whole-sample segments, then carry the previous mark's fraction over to the new one, so rounding
-    // never accumulates from period to period.
-    const std::int64_t anchor = std::llround(previous);
-    const double fraction = previous - static_cast<double>(anchor);
-    const std::int64_t centre = std::llround(guess - fraction);
-    const std::int64_t low = std::max<std::int64_t>(centre - radius, anchor + length / 2);
-    const std::int64_t high = centre + radius;
-    if (low > high)
-        return guess;
-
-    double energy = 0.0;
-    for (std::int64_t k = low - length; k < low; ++k)
-        energy += static_cast<double>(monoAt(k)) * monoAt(k);
-
-    std::int64_t best = centre;
-    double bestScore = -1.0e300;
-    double beforeBest = 0.0;
-    double afterBest = 0.0;
-    double previousScore = 0.0;
-    bool captureNext = false;
-    for (std::int64_t candidate = low; candidate <= high; ++candidate)
-    {
-        double dot = 0.0;
-        for (int k = 0; k < length; ++k)
-            dot += static_cast<double>(monoAt(anchor - length + k)) * monoAt(candidate - length + k);
-        const double score = dot / std::sqrt(energy + 1.0e-12);
-        if (captureNext)
-        {
-            afterBest = score;
-            captureNext = false;
-        }
-        if (score > bestScore)
-        {
-            bestScore = score;
-            best = candidate;
-            beforeBest = candidate > low ? previousScore : score;
-            afterBest = score;
-            captureNext = true;
-        }
-        previousScore = score;
-        const double incoming = monoAt(candidate);
-        const double outgoing = monoAt(candidate - length);
-        energy = std::max(0.0, energy + incoming * incoming - outgoing * outgoing);
-    }
-    const double curvature = beforeBest - 2.0 * bestScore + afterBest;
-    const double offset = curvature < 0.0 ? std::clamp(0.5 * (beforeBest - afterBest) / curvature, -0.5, 0.5) : 0.0;
-    return static_cast<double>(best) + offset + fraction;
-}
-
-double VoiceShifter::strongestNear(double guess, float period, double notBefore) const noexcept
-{
-    const int half = std::max(1, static_cast<int>(std::lround(period * 0.5f)));
-    const std::int64_t low = std::max(std::llround(guess) - half, static_cast<std::int64_t>(std::ceil(notBefore)));
-    const std::int64_t high = std::llround(guess) + half;
-    std::int64_t best = std::max(std::llround(guess), low);
-    float bestLevel = -1.0f;
-    for (std::int64_t i = low; i <= high; ++i)
-    {
-        const float level = std::abs(monoAt(i));
-        if (level > bestLevel)
-        {
-            bestLevel = level;
-            best = i;
-        }
-    }
-    return static_cast<double>(best);
-}
-
 void VoiceShifter::placeMarks() noexcept
 {
+    const auto signal = [this](std::int64_t index) { return monoAt(index); };
     const auto front = static_cast<double>(written - 1 - markLag);
     const float shortest = static_cast<float>(rate / kMaxHz) * 0.9f;
     const float longest = static_cast<float>(maxPeriod) * 1.05f;
@@ -185,10 +108,11 @@ void VoiceShifter::placeMarks() noexcept
                                     std::abs(previous->period - mark.period) < 0.2f * mark.period &&
                                     guess - previous->position < 1.5 * static_cast<double>(mark.period);
             if (continuous)
-                mark.position = alignToPrevious(previous->position, guess, mark.period);
-            else
                 mark.position =
-                    strongestNear(guess, mark.period, previous != nullptr ? previous->position + 1.0 : guess);
+                    animalaudio::dsp::psola::alignToPrevious(signal, previous->position, guess, mark.period);
+            else
+                mark.position = animalaudio::dsp::psola::strongestNear(
+                    signal, guess, mark.period, previous != nullptr ? previous->position + 1.0 : guess);
         }
         marks[static_cast<std::size_t>(markCount % kMarkSlots)] = mark;
         ++markCount;
@@ -376,7 +300,7 @@ void VoiceShifter::process(float* const* channels, int numChannels, int numSampl
             if (!grain.active)
                 continue;
             const double dt = static_cast<double>(now) - grain.centre;
-            const float u = static_cast<float>(dt) * (dt < 0.0 ? grain.invLeft : grain.invRight);
+            const float u = animalaudio::dsp::psola::HannTable::position(grain, dt);
             if (u >= 1.0f)
             {
                 grain.active = false;
@@ -384,12 +308,7 @@ void VoiceShifter::process(float* const* channels, int numChannels, int numSampl
             }
             if (u <= -1.0f)
                 continue;
-            const float index = std::abs(u) * kWindowSize;
-            const int whole = static_cast<int>(index);
-            const float frac = index - static_cast<float>(whole);
-            const float w = (hann[static_cast<std::size_t>(whole)] + frac * (hann[static_cast<std::size_t>(whole + 1)] -
-                                                                             hann[static_cast<std::size_t>(whole)])) *
-                            grain.gain;
+            const float w = hann.value(u) * grain.gain;
             reader.prepareRead(grain.source + grain.beta * dt, grain.beta, weights);
             for (int ch = 0; ch < count; ++ch)
                 out[ch] += w * animalaudio::dsp::SincReader::apply(weights,

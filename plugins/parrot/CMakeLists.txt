@@ -4,8 +4,7 @@ set(PARROT_SOURCES
     Source/dsp/ParrotEngine.cpp
     Source/dsp/VoiceShifter.cpp
     Source/ui/ParrotMotif.cpp
-    Source/ui/ParrotTheme.cpp
-    Source/ui/ParrotWidgets.cpp)
+    Source/ui/ParrotTheme.cpp)
 
 aa_add_plugin(Parrot
     PRODUCT_NAME "Parrot"

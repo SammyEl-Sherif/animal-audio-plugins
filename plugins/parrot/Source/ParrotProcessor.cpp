@@ -7,13 +7,6 @@
 
 namespace parrot
 {
-juce::String formatSemitones(float value)
-{
-    const bool whole = std::abs(value - std::round(value)) < 0.005f;
-    const juce::String number = juce::String(std::abs(value), whole ? 0 : 2);
-    return (value > 0.0005f ? "+" : value < -0.0005f ? "-" : "") + number + " st";
-}
-
 namespace
 {
 juce::String percentText(float value)

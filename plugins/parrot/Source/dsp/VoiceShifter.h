@@ -1,6 +1,7 @@
 #pragma once
 
 #include <animalaudio/dsp/PitchTracker.h>
+#include <animalaudio/dsp/Psola.h>
 #include <animalaudio/dsp/WindowedSinc.h>
 
 #include <array>
@@ -88,26 +89,17 @@ private:
         bool voiced = false;
     };
 
-    struct Grain
+    struct Grain : animalaudio::dsp::psola::Grain
     {
-        double source = 0.0;
-        double centre = 0.0;
-        float beta = 1.0f;
-        float invLeft = 1.0f;
-        float invRight = 1.0f;
-        float gain = 1.0f;
         bool active = false;
     };
 
     static constexpr int kEstimateSlots = 128;
     static constexpr int kMarkSlots = 1024;
     static constexpr int kGrainSlots = 128;
-    static constexpr int kWindowSize = 1024;
 
     const Estimate& estimateNear(std::int64_t position) const noexcept;
     void placeMarks() noexcept;
-    double alignToPrevious(double previous, double guess, float period) const noexcept;
-    double strongestNear(double guess, float period, double notBefore) const noexcept;
     const Mark& markAt(std::int64_t index) const noexcept
     {
         return marks[static_cast<std::size_t>(index % kMarkSlots)];
@@ -130,7 +122,7 @@ private:
     std::vector<float> mono;
     animalaudio::dsp::PitchTracker tracker;
     animalaudio::dsp::SincReader reader;
-    std::array<float, kWindowSize + 2> hann{};
+    animalaudio::dsp::psola::HannTable hann;
 
     std::array<Estimate, kEstimateSlots> estimates{};
     std::int64_t estimateCount = 0;
