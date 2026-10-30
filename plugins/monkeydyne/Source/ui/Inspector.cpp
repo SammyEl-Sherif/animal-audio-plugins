@@ -16,9 +16,10 @@ namespace
 using animalaudio::core::formatSemitones;
 using animalaudio::ui::makeFont;
 
-constexpr float kBaseWidths[] = {392.0f, 200.0f, 200.0f, 164.0f, 160.0f};
+constexpr float kBaseWidths[] = {380.0f, 196.0f, 196.0f, 160.0f, 184.0f};
 constexpr float kGap = 6.0f;
-constexpr float kKnobSize = 54.0f;
+constexpr float kKnobSize = 66.0f;
+constexpr float kKnobTop = 32.0f;
 constexpr int kPanelCount = 5;
 const char* const kKeyNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 const char* const kModeNames[] = {"CHR", "MAJ", "MIN"};
@@ -269,7 +270,7 @@ void Inspector::resized()
             k.slot =
                 juce::Rectangle<float>(area.getX() + slot * static_cast<float>(i), area.getY(), slot, area.getHeight());
             k.knob->setBounds(juce::Rectangle<float>(kKnobSize, kKnobSize)
-                                  .withCentre({k.slot.getCentreX(), area.getY() + 30.0f + kKnobSize * 0.5f})
+                                  .withCentre({k.slot.getCentreX(), area.getY() + kKnobTop + kKnobSize * 0.5f})
                                   .getSmallestIntegerContainer());
         }
     };
@@ -278,16 +279,18 @@ void Inspector::resized()
     place(2, glideKnob, 2);
 
     const auto scale = panelArea(3).getSmallestIntegerContainer();
-    keyDown.setBounds(scale.getX() + 16, scale.getY() + 38, 24, 24);
-    keyUp.setBounds(scale.getRight() - 16 - 24, scale.getY() + 38, 24, 24);
+    keyDown.setBounds(scale.getX() + 16, scale.getY() + 42, 24, 24);
+    keyUp.setBounds(scale.getRight() - 16 - 24, scale.getY() + 42, 24, 24);
     const int pillWidth = (scale.getWidth() - 32 - 8) / 3;
     for (int i = 0; i < 3; ++i)
-        modeButtons[static_cast<std::size_t>(i)]->setBounds(scale.getX() + 16 + i * (pillWidth + 4), scale.getY() + 80,
-                                                            pillWidth, 22);
+        modeButtons[static_cast<std::size_t>(i)]->setBounds(scale.getX() + 16 + i * (pillWidth + 4), scale.getY() + 96,
+                                                            pillWidth, 24);
 
     const auto output = panelArea(4).getSmallestIntegerContainer();
-    mixKnob.setBounds(output.getX() + 12, output.getY() + 30, static_cast<int>(kKnobSize), static_cast<int>(kKnobSize));
-    compareButton.setBounds(output.getX() + 76, output.getY() + 76, output.getWidth() - 76 - 12, 24);
+    const int size = static_cast<int>(kKnobSize);
+    mixKnob.setBounds(output.getX() + 12, output.getY() + static_cast<int>(kKnobTop), size, size);
+    const int column = 12 + size + 10;
+    compareButton.setBounds(output.getX() + column, output.getY() + 90, output.getWidth() - column - 12, 24);
 }
 
 void Inspector::paintPanel(juce::Graphics& g, int index, const juce::String& title, juce::Colour key,
@@ -308,16 +311,16 @@ void Inspector::paintPanel(juce::Graphics& g, int index, const juce::String& tit
 void Inspector::paintKnobLabels(juce::Graphics& g, const Knob& k) const
 {
     const auto& palette = theme.palette;
-    const float y = static_cast<float>(k.knob->getBottom()) + 3.0f;
+    const float y = static_cast<float>(k.knob->getBottom()) + 4.0f;
     const float alpha = k.knob->isEnabled() ? 1.0f : 0.4f;
     g.setColour(palette.textDim.withAlpha(alpha));
     g.setFont(makeFont(9.0f, true, 0.18f));
     g.drawText(k.spec.name, juce::Rectangle<float>(k.slot.getX(), y, k.slot.getWidth(), 11.0f),
                juce::Justification::centred, false);
     g.setColour(palette.text.withAlpha(alpha));
-    g.setFont(makeFont(11.5f, true, 0.02f));
+    g.setFont(makeFont(14.0f, true, 0.02f));
     g.drawText(k.spec.format(static_cast<float>(k.knob->getValue())),
-               juce::Rectangle<float>(k.slot.getX(), y + 12.0f, k.slot.getWidth(), 14.0f), juce::Justification::centred,
+               juce::Rectangle<float>(k.slot.getX(), y + 12.0f, k.slot.getWidth(), 17.0f), juce::Justification::centred,
                false);
 }
 
@@ -357,10 +360,10 @@ void Inspector::paint(juce::Graphics& g)
     const auto scaleArea = panelArea(3);
     const auto scale = controller.scale();
     g.setColour(palette.text);
-    g.setFont(makeFont(20.0f, true, 0.04f));
+    g.setFont(makeFont(24.0f, true, 0.04f));
     g.drawText(
         kKeyNames[scale.key],
-        juce::Rectangle<float>(scaleArea.getX() + 40.0f, scaleArea.getY() + 34.0f, scaleArea.getWidth() - 80.0f, 22.0f),
+        juce::Rectangle<float>(scaleArea.getX() + 40.0f, scaleArea.getY() + 40.0f, scaleArea.getWidth() - 80.0f, 26.0f),
         juce::Justification::centred, false);
     g.setColour(palette.textDim);
     g.setFont(makeFont(8.5f, true, 0.2f));
@@ -368,19 +371,22 @@ void Inspector::paint(juce::Graphics& g)
         scale.mode == dsp::Scale::Mode::Chromatic ? "ANY SEMITONE"
         : scale.mode == dsp::Scale::Mode::Major   ? "MAJOR"
                                                   : "MINOR",
-        juce::Rectangle<float>(scaleArea.getX() + 40.0f, scaleArea.getY() + 56.0f, scaleArea.getWidth() - 80.0f, 12.0f),
+        juce::Rectangle<float>(scaleArea.getX() + 40.0f, scaleArea.getY() + 68.0f, scaleArea.getWidth() - 80.0f, 12.0f),
         juce::Justification::centred, false);
 
     const auto output = panelArea(4);
+    const float column = 12.0f + kKnobSize + 10.0f;
     g.setColour(palette.text);
-    g.setFont(makeFont(17.0f, true, 0.02f));
+    g.setFont(makeFont(21.0f, true, 0.02f));
     g.drawText(juce::String(juce::roundToInt(mixKnob.getValue() * 100.0)) + " %",
-               juce::Rectangle<float>(output.getX() + 76.0f, output.getY() + 36.0f, output.getWidth() - 88.0f, 20.0f),
+               juce::Rectangle<float>(output.getX() + column, output.getY() + 40.0f, output.getWidth() - column - 12.0f,
+                                      24.0f),
                juce::Justification::centredLeft, false);
     g.setColour(palette.textDim);
     g.setFont(makeFont(8.5f, true, 0.2f));
     g.drawText("EDIT MIX",
-               juce::Rectangle<float>(output.getX() + 76.0f, output.getY() + 56.0f, output.getWidth() - 88.0f, 12.0f),
+               juce::Rectangle<float>(output.getX() + column, output.getY() + 64.0f, output.getWidth() - column - 12.0f,
+                                      12.0f),
                juce::Justification::centredLeft, false);
 }
 } // namespace monkeydyne::ui

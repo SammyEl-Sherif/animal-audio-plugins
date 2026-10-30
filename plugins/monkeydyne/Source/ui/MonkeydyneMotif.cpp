@@ -13,14 +13,20 @@ juce::Rectangle<float> disc(juce::Point<float> centre, float radius)
     return juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre);
 }
 
+/** Banana yellow turned toward orange: warm, before it is darkened into fur and lightened into the face. */
+juce::Colour tan(const animalaudio::ui::Palette& palette)
+{
+    return palette.accentAlt.withRotatedHue(-0.055f);
+}
+
 juce::Colour fur(const animalaudio::ui::Palette& palette)
 {
-    return palette.accentAlt.interpolatedWith(palette.background, 0.5f);
+    return tan(palette).interpolatedWith(palette.background, 0.5f);
 }
 
 juce::Colour face(const animalaudio::ui::Palette& palette)
 {
-    return palette.text.interpolatedWith(palette.accentAlt, 0.42f);
+    return palette.text.interpolatedWith(tan(palette), 0.35f);
 }
 
 juce::Colour firefly(const animalaudio::ui::Palette& palette)
@@ -111,7 +117,7 @@ void MonkeydyneMotif::drawMascot(juce::Graphics& g, juce::Rectangle<float> area,
                                            faceColour.darker(0.12f), at(0.5f, 0.78f).x, at(0.5f, 0.78f).y, false));
     g.fillPath(mask);
 
-    g.setColour(palette.accentAlt.withAlpha(0.3f));
+    g.setColour(palette.accent.withAlpha(0.3f));
     g.fillEllipse(oval(0.31f, 0.60f, 0.08f, 0.05f));
     g.fillEllipse(oval(0.69f, 0.60f, 0.08f, 0.05f));
 
@@ -169,10 +175,6 @@ void MonkeydyneMotif::drawKnobCap(juce::Graphics& g, juce::Point<float> centre, 
 void MonkeydyneMotif::drawAmbient(juce::Graphics& g, juce::Rectangle<float> area, double timeSeconds,
                                   const animalaudio::ui::Palette& palette) const
 {
-    g.setGradientFill(juce::ColourGradient(palette.ambient.brighter(0.35f), 0.0f, area.getY(), palette.ambient, 0.0f,
-                                           area.getBottom(), false));
-    g.fillRect(area);
-
     // Vines hang from the canopy and sway with the clock the caller passes (the host playhead), so a still
     // transport is a still jungle. {x, length as a share of the height, phase}
     static constexpr float vines[][3] = {{0.04f, 0.30f, 0.0f}, {0.17f, 0.18f, 1.7f}, {0.31f, 0.38f, 3.1f},
@@ -194,11 +196,11 @@ void MonkeydyneMotif::drawAmbient(juce::Graphics& g, juce::Rectangle<float> area
         stem.startNewSubPath(pointAt(0.0f));
         for (int i = 1; i <= 16; ++i)
             stem.lineTo(pointAt(static_cast<float>(i) / 16.0f));
-        g.setColour(palette.accent.withAlpha(0.07f));
+        g.setColour(palette.detail.withAlpha(0.07f));
         g.strokePath(stem, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         const auto leaf = makeLeaf(leafLength);
-        g.setColour(palette.accent.withAlpha(0.055f));
+        g.setColour(palette.detail.withAlpha(0.055f));
         for (int i = 1; i <= 5; ++i)
         {
             const float u = static_cast<float>(i) / 5.2f;
@@ -235,7 +237,7 @@ void MonkeydyneMotif::drawDecoration(juce::Graphics& g, juce::Rectangle<float> p
                                           {0.90f, 0.18f, 6.0f, 2.4f},
                                           {0.94f, 0.30f, 4.0f, 1.2f},
                                           {0.55f, 0.88f, 5.0f, -2.2f}};
-    g.setColour(palette.accent.withAlpha(0.07f));
+    g.setColour(palette.detail.withAlpha(0.07f));
     for (const auto& leaf : leaves)
     {
         const auto c = juce::Point<float>(panelArea.getX() + panelArea.getWidth() * leaf[0],

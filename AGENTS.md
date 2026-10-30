@@ -97,7 +97,7 @@ plugins/monkeydyne/   note-based vocal editor (own processor, worker thread and 
                       merge, link, reset), Renderer (offline TD-PSOLA), SegmentCache, Capture, Playback
   Source/engine/      Session (takes + notes + scale + undo), Worker (thread: capture chunks, analysis, renders),
                       StateCodec (MKD1 + XML + 24-bit FLAC per take)
-  Source/ui/          MonkeydyneTheme (kThemeHue 186), MonkeydyneMotif (monkey head, banana knob pointer, vines,
+  Source/ui/          MonkeydyneTheme (kThemeHue 312), MonkeydyneMotif (monkey head, banana knob pointer, vines,
                       fireflies), EditController (selection, gestures, undo), NoteCanvas (piano roll), Inspector,
                       Overview
   tests/              MonkeydyneTests (processor), MonkeydyneDspTests, MonkeydyneEditorTests;
@@ -367,8 +367,9 @@ elsewhere and during capture). Stopped, clicking a note auditions it. A take pla
   `Overview` strip; the `Inspector` (NOTES: PITCH / SNAP / STRAIGHTEN / VIBRATO, SOUND: FORMANT / GAIN, GLIDE:
   GLIDE / CURVE, SCALE, OUTPUT: MIX / COMPARE). PITCH, FORMANT and GAIN knobs are relative (each note keeps its
   offset); the others set absolute values. Editor tests use synthetic component events only.
-- Palette: teal-black jungle night with an aqua accent for notes (`kThemeHue` 186); coral (`accentAlt`) marks the
-  selection and glides (darkened, it is the monkey's fur), violet (`detail`) the formant.
+- Palette: Parrot's warm charcoal with tropical colours: hot pink for notes (`kThemeHue` 312); banana yellow
+  (`accentAlt`) marks the selection and glides (turned toward orange and darkened, it is the monkey's fur), jungle
+  lime (`detail`) the formant and the vines.
 - Limits: monophonic; takes are tied to song time (moving the clip or changing tempo needs a new transfer); pYIN,
   not a neural tracker.
 

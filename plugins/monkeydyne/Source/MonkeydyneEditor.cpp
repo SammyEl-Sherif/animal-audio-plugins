@@ -18,7 +18,7 @@ constexpr int kToolbarY = 78;
 constexpr int kToolbarH = 28;
 constexpr int kMargin = 20;
 constexpr int kOverviewH = 30;
-constexpr int kInspectorH = 128;
+constexpr int kInspectorH = 150;
 constexpr int kFooterH = 26;
 constexpr int kClearConfirmTicks = 90;
 
@@ -259,7 +259,7 @@ void MonkeydyneEditor::paint(juce::Graphics& g)
     g.fillAll();
     animalaudio::ui::drawTitleBar(g, getLocalBounds().toFloat().withHeight(kHeaderH), theme);
 
-    // Transfer: a coral ring breathes around the button while it records.
+    // Transfer: a yellow ring breathes around the button while it records.
     if (owner.isCapturing())
     {
         const float pulse =

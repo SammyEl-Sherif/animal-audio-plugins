@@ -4,7 +4,7 @@
 
 namespace monkeydyne::ui
 {
-inline constexpr float kThemeHue = 186.0f; // read by scripts/new_plugin.py to keep plugins' hues apart
+inline constexpr float kThemeHue = 312.0f; // read by scripts/new_plugin.py to keep plugins' hues apart
 
 animalaudio::ui::Palette makePalette();
 

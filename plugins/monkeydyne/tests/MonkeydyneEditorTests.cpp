@@ -150,9 +150,9 @@ TEST_CASE("monkeydyne: editor renders headlessly")
     const auto palette = ui::makePalette();
     const auto blob = rig.canvas().noteBounds({take.id, notes[go].id}).toNearestInt() + rig.canvas().getPosition();
     REQUIRE_FALSE(blob.isEmpty());
-    REQUIRE(hasHue(image, (blob * 2).reduced(4), palette.accentAlt)); // the selected note is coral
+    REQUIRE(hasHue(image, (blob * 2).reduced(4), palette.accentAlt)); // the selected note is yellow
     const auto other = rig.canvas().noteBounds(rig.note(4)).toNearestInt() + rig.canvas().getPosition();
-    REQUIRE(hasHue(image, (other * 2).reduced(4), palette.accent)); // the others aqua
+    REQUIRE(hasHue(image, (other * 2).reduced(4), palette.accent)); // the others pink
 }
 
 TEST_CASE("monkeydyne: an empty editor says how to start")
