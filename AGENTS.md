@@ -97,7 +97,7 @@ plugins/monkeydyne/   note-based vocal editor (own processor, worker thread and 
                       merge, link, reset), Renderer (offline TD-PSOLA), SegmentCache, Capture, Playback
   Source/engine/      Session (takes + notes + scale + undo), Worker (thread: capture chunks, analysis, renders),
                       StateCodec (MKD1 + XML + 24-bit FLAC per take)
-  Source/ui/          MonkeydyneTheme (kThemeHue 312), MonkeydyneMotif (monkey head, banana knob pointer, vines,
+  Source/ui/          MonkeydyneTheme (kThemeHue 50), MonkeydyneMotif (monkey head, banana knob pointer, vines,
                       fireflies), EditController (selection, gestures, undo), NoteCanvas (piano roll), Inspector,
                       Overview
   tests/              MonkeydyneTests (processor), MonkeydyneDspTests, MonkeydyneEditorTests;
@@ -200,7 +200,8 @@ processor when the concept needs it; keep Animal Audio branding (`BrandBadge`, p
 
 - Palette roles are fixed (`ui::Palette`: background/panel/panelRaised/outline, text/textDim,
   accent/accentAlt/onAccent, detail, ambient); values are per plugin in `plugins/<name>/Source/ui/<Name>Theme.cpp`,
-  started from `makePaletteFromHue(kThemeHue)` and hand-tuned. Hues of different plugins stay >= ~30 degrees apart.
+  started from `makePaletteFromHue(kThemeHue)` and hand-tuned. Hues of different plugins stay >= ~30 degrees apart
+  (one deliberate exception: Monkeydyne's banana yellow beside Duck's).
 - The animal is a `ui::Motif` subclass (mascot, knob cap, ambient background, decoration) using palette colours only.
 - Colour literals live only in Theme/Motif files. **UI layout is per plugin** (custom editor or shared widgets);
   `ui::ShaperEditor` is the optional curve-shaper layout Duck uses—reuse it when it fits, not as a series default.
@@ -367,9 +368,10 @@ elsewhere and during capture). Stopped, clicking a note auditions it. A take pla
   `Overview` strip; the `Inspector` (NOTES: PITCH / SNAP / STRAIGHTEN / VIBRATO, SOUND: FORMANT / GAIN, GLIDE:
   GLIDE / CURVE, SCALE, OUTPUT: MIX / COMPARE). PITCH, FORMANT and GAIN knobs are relative (each note keeps its
   offset); the others set absolute values. Editor tests use synthetic component events only.
-- Palette: Parrot's warm charcoal with tropical colours: hot pink for notes (`kThemeHue` 312); banana yellow
-  (`accentAlt`) marks the selection and glides (turned toward orange and darkened, it is the monkey's fur), jungle
-  lime (`detail`) the formant and the vines.
+- Palette: Parrot's warm charcoal with tropical colours: banana yellow for notes, controls and the banana pointers
+  (`kThemeHue` 50; turned toward orange and darkened, it is the monkey's fur); hibiscus coral (`accentAlt`) marks the
+  selection and glides, jungle lime (`detail`) the formant and the vines. The yellow sits next to Duck's on purpose
+  (requested); the coral, the lime and the layout keep the two apart.
 - Limits: monophonic; takes are tied to song time (moving the clip or changing tempo needs a new transfer); pYIN,
   not a neural tracker.
 

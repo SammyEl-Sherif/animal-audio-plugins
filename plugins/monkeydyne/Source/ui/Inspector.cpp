@@ -71,7 +71,7 @@ Inspector::Inspector(EditController& c, const animalaudio::ui::Theme& t, juce::A
     addKnob({"VIBRATO", 0.0, 2.0, 0.01, 1.0, false, false, [](const dsp::Note& n) { return n.vibrato; },
              [](dsp::Note& n, float v) { n.vibrato = v; }, percent,
              "Fast pitch movement kept: 0% removes the vibrato, 100% as sung, 200% doubles it."},
-            palette.accent.interpolatedWith(palette.detail, 0.4f));
+            palette.accent.interpolatedWith(palette.accentAlt, 0.45f));
     addKnob({"FORMANT", -12.0, 12.0, 0.01, 0.0, true, true, [](const dsp::Note& n) { return n.formant; },
              [](dsp::Note& n, float change) { n.formant += change; },
              [](float v) { return formatSemitones(v).toUpperCase(); },

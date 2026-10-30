@@ -13,10 +13,10 @@ juce::Rectangle<float> disc(juce::Point<float> centre, float radius)
     return juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre);
 }
 
-/** Banana yellow turned toward orange: warm, before it is darkened into fur and lightened into the face. */
+/** The banana yellow turned toward orange: warm, before it is darkened into fur and lightened into the face. */
 juce::Colour tan(const animalaudio::ui::Palette& palette)
 {
-    return palette.accentAlt.withRotatedHue(-0.055f);
+    return palette.accent.withRotatedHue(-0.055f);
 }
 
 juce::Colour fur(const animalaudio::ui::Palette& palette)
@@ -31,7 +31,7 @@ juce::Colour face(const animalaudio::ui::Palette& palette)
 
 juce::Colour firefly(const animalaudio::ui::Palette& palette)
 {
-    return palette.accentAlt.interpolatedWith(palette.text, 0.45f);
+    return palette.accent.interpolatedWith(palette.text, 0.45f);
 }
 
 float fract(float x)
@@ -117,7 +117,7 @@ void MonkeydyneMotif::drawMascot(juce::Graphics& g, juce::Rectangle<float> area,
                                            faceColour.darker(0.12f), at(0.5f, 0.78f).x, at(0.5f, 0.78f).y, false));
     g.fillPath(mask);
 
-    g.setColour(palette.accent.withAlpha(0.3f));
+    g.setColour(palette.accentAlt.withAlpha(0.3f));
     g.fillEllipse(oval(0.31f, 0.60f, 0.08f, 0.05f));
     g.fillEllipse(oval(0.69f, 0.60f, 0.08f, 0.05f));
 

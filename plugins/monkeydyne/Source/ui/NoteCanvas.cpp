@@ -608,8 +608,9 @@ void NoteCanvas::paintNotes(juce::Graphics& g, const TakeInfo& take, const dsp::
             continue;
         }
         const float lift = hot(ref) ? 0.12f : 0.0f;
-        g.setGradientFill(juce::ColourGradient(base.brighter(0.3f).withAlpha(0.82f + lift), 0.0f, cy - maxH,
-                                               base.darker(0.45f).withAlpha(0.74f + lift), 0.0f, cy + maxH, false));
+        // Nearly opaque and only lightly shaded: yellow faded or darkened over black turns olive.
+        g.setGradientFill(juce::ColourGradient(base.brighter(0.25f).withAlpha(0.88f + lift), 0.0f, cy - maxH,
+                                               base.darker(0.2f).withAlpha(0.84f + lift), 0.0f, cy + maxH, false));
         g.fillPath(path);
         g.setColour(base.brighter(0.6f).withAlpha(selected ? 0.95f : 0.4f + lift * 2.0f));
         g.strokePath(path, juce::PathStrokeType(selected ? 1.4f : 1.0f));

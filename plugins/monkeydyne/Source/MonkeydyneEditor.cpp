@@ -259,7 +259,7 @@ void MonkeydyneEditor::paint(juce::Graphics& g)
     g.fillAll();
     animalaudio::ui::drawTitleBar(g, getLocalBounds().toFloat().withHeight(kHeaderH), theme);
 
-    // Transfer: a yellow ring breathes around the button while it records.
+    // Transfer: a coral ring breathes around the button while it records.
     if (owner.isCapturing())
     {
         const float pulse =
