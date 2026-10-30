@@ -47,6 +47,7 @@ and [AGENTS.md](AGENTS.md).
 | --- | --- | --- | --- |
 | **Duck** | Tempo-synced volume ducking with a draggable curve editor, 16 preset shapes and a big MIX knob | `plugins/duck` | Alpha: builds as VST3, all tests pass, passes pluginval level 10 on Linux; not yet tried in a real DAW |
 | **Turtle Time** | Tempo-synced half-time, reverse, and beat repeat | `plugins/turtletime` | Private beta (0.1.0): VST3 builds, plugin tests pass, passes pluginval level 10 on macOS; loaded in Ableton Live on macOS |
+| **Parrot** | Pitch and formant voice bender with snap, robot and tube drive | `plugins/parrot` | Alpha (0.1.0): VST3 builds, plugin tests pass, passes pluginval level 10 on macOS; not yet tried in a DAW |
 <!-- PLUGINS:END -->
 
 More animals are on the way. Adding one takes a single command (or the `/vst` agent skill), see [Adding a plugin](#adding-a-plugin).
@@ -99,6 +100,39 @@ or as a repeating slice) and jumps back onto the grid so the pitch drop stays in
 </p>
 
 > Screenshot from `AA_SCREENSHOT_DIR=docs/images ./build/plugins/turtletime/TurtleTimeTests "turtletime: editor renders headlessly"`.
+
+## Parrot
+
+A real-time voice bender: move the pitch and the formants of a voice independently, pull it onto semitones or
+hold it on one robot note, then push it through a modelled tube preamp.
+
+- **PITCH and FORMANT**, each ±12 semitones and independent: pitch up with formants down gives a big, deep
+  character; formants alone change the apparent size of the singer. FINE off moves both in whole semitones;
+  **LINK** makes the formants follow the pitch, like a tape or sampler (chipmunk up, giant down).
+- **Modes**: SHIFT transposes. SNAP pulls each note to the nearest semitone, then transposes; GLIDE softens the
+  pull. ROBOT holds one steady note, from the NOTE selector or a held MIDI key (route a MIDI track to Parrot in
+  Live), transposed by PITCH; GLIDE gives it portamento.
+- **How it works**: a YIN pitch tracker (de Cheveigné & Kawahara, 2002) finds the period. Pitch-synchronous
+  overlap-add (TD-PSOLA, Moulines & Charpentier, 1990) cuts the voice into grains one period long, centred on
+  pitch marks aligned to a fraction of a sample, and re-spaces them for the new pitch; resampling each grain
+  (band-limited sinc) moves the formants. Breath and consonants pass through without a pitch buzz.
+  Measured in the tests: shifts land within 0.1 cent, formants within half a semitone of the target, level
+  within 0.5 dB.
+- **DRIVE**: two 12AX7 triode stages built from Koren's tube equation with Cohen & Hélie's measured 12AX7
+  constants, including grid current and cathode bias shift, 4x oversampled and level-matched. Light settings add
+  warm, mostly even harmonics; high settings compress and break up.
+- **Display**: detected note and output note, the formant shift, and a pitch roll with the input (grey) and
+  output (scarlet) over the last four seconds, plus the robot target.
+- **MIX** blends with the dry signal, delayed to line up with the shifted one.
+- **Latency**: about 69 ms at any sample rate, reported to the host, which compensates it on playback. The pitch
+  tracker and the grains need that much look-ahead for the lowest voices (75 Hz), with formants lowered up to an
+  octave. Monitoring through Parrot while recording will feel late.
+
+<p align="center">
+  <img src="docs/images/parrot-ui.png" alt="Parrot by Animal Audio" width="760">
+</p>
+
+> Screenshot from `AA_SCREENSHOT_DIR=docs/images ./build/plugins/parrot/ParrotTests "parrot: editor renders headlessly"`.
 
 ## Build
 
@@ -177,7 +211,8 @@ Upload paths and Supabase steps: [docs/RELEASE.md](docs/RELEASE.md) and **animal
 ```
 CMakeLists.txt          top level: fetches JUCE/Catch2, adds shared/ and every plugins/*
 cmake/                  FetchDependencies.cmake, AnimalAudioPlugin.cmake (aa_add_plugin)
-shared/dsp/             animalaudio::dsp  header-only C++17 DSP (smoothing, tempo sync, curves, gain engine) + tests
+shared/dsp/             animalaudio::dsp  header-only C++17 DSP (smoothing, tempo sync, curves, gain engine, pitch
+                        tracking, sinc resampling, oversampling, tube drive) + tests
 shared/core/            animalaudio::core curve state, shaper processor base class (params, state, transport)
 shared/ui/              animalaudio::ui   Theme (palette + animal motif), the shaper editor and its widgets
 shared/testing/         animalaudio::testing  standard test suites every shaper plugin runs

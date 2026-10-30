@@ -13,6 +13,7 @@ Stack: **JUCE 8 + CMake (C++17)**, Catch2 for tests. VST3 only (Standalone optio
 | --- | --- | --- | --- |
 | Duck (volume ducking / shaper) | `plugins/duck` | `Duck` (`Duck_VST3`), tests: `DuckTests` | `Duck` |
 | Turtle Time (half-time / time warp) | `plugins/turtletime` | `TurtleTime` (`TurtleTime_VST3`), tests: `TurtleTimeTests` | `Turt` |
+| Parrot (pitch / formant voice bender) | `plugins/parrot` | `Parrot` (`Parrot_VST3`), tests: `ParrotTests` | `Parr` |
 
 New plugins: use the **`/vst <name or idea>`** skill (see [Creating a plugin with `/vst`](#creating-a-plugin-with-vst)).
 
@@ -34,24 +35,31 @@ Contributors never need Apple or Supabase credentials and never edit release scr
 
 ```
 CMakeLists.txt        options + FetchContent + auto-discovers plugins/*/CMakeLists.txt
-cmake/                FetchDependencies.cmake (JUCE/Catch2 pins), AnimalAudioPlugin.cmake (aa_add_plugin)
+cmake/                FetchDependencies.cmake (JUCE/Catch2 pins), AnimalAudioPlugin.cmake (aa_add_plugin;
+                      NEEDS_MIDI_INPUT TRUE for effects that take MIDI notes, like Parrot)
 shared/dsp/           animalaudio::dsp  INTERFACE, pure C++17, NO JUCE. Tests in shared/dsp/tests
   Smoothing.h         OnePoleSmoother (parameter/gain declick)
   TempoSync.h         Division (1/8..1/1), beatsPerCycle, PhaseTracker (host-locked or free-run phase)
   ShapeCurve.h        node/bend curve (message thread) + CurveTable (baked LUT for the audio thread)
   CurvePreset.h       CurvePreset / CurvePresetList;  StandardPresets.h: the 16 stock shapes (plugin supplies names)
   CurveGainShaper.h   curve -> gain engine (declick, mix, scope feed);  CycleScope.h: audio->UI scope bins
+  PitchTracker.h      YIN pitch tracker (decimated, refined at full rate, harmonic-error guard), one estimate / ~2.7 ms
+  WindowedSinc.h      Kaiser-windowed sinc design + SincReader (band-limited fractional read, stretch up to 2x)
+  Oversampler.h       Oversampler4x (polyphase Kaiser FIR, integer latency of 32 base samples)
+  TubeDrive.h         two 12AX7 stages (Koren triode, Cohen & Helie constants, grid current, cathode bias shift),
+                      4x oversampled, level-matched, exactly clean at drive 0; heat meter for the UI
 shared/core/          animalaudio::core INTERFACE (sources compile into each plugin): JUCE but no GUI
   CurveState          curve stored in the APVTS ValueTree + lock-free-ish publish to the audio thread
   CurveShaperProcessor  base AudioProcessor: standard params (division, mix, fallbackBpm), state save/restore,
                       transport + phase plumbing; GainShaperProcessor = same with CurveGainShaper DSP
   TransportReader.h   AudioPlayHead -> dsp::TransportInfo
 shared/ui/            animalaudio::ui   INTERFACE lib whose .cpp files compile into each plugin
-  Palette.h           colour roles every widget draws from; makePaletteFromHue(); makeFont()
+  Palette.h           colour roles every widget draws from; makePaletteFromHue(); makeFont(height, bold, kerning)
   Theme.h             Theme { Palette, name, tagline, Motif }; Motif = the animal (mascot, knob cap, ambient, decoration)
   ShaperEditor        optional shared curve-shaper editor (Duck uses it at 820x470); not required for every plugin
   BrandBadge, PillButton, ChoicePillRow, RotaryKnob/ThemedKnob, CurveEditor, CurvePresetPanel, Drawing.h
 shared/testing/       animalaudio::testing header-only Catch2 suites: AA_SHAPER_PLUGIN_TESTS, AA_GAIN_SHAPER_PLUGIN_TESTS
+  SignalProbe.h       JUCE-free signal helpers for DSP tests (sine, noise, rms, tone amplitude, peak frequency, cents)
 plugins/duck/         only what is Duck-specific:
   Source/             DuckProcessor (GainShaperProcessor + presets), DuckEditor (ShaperEditor + DuckTheme)
   Source/dsp/         DuckPresets (names for the standard shapes)
@@ -63,6 +71,13 @@ plugins/turtletime/  half-time / time warp (own processor, not the curve shaper)
   Source/ui/          TurtleTimeTheme (kThemeHue 147), TurtleTimeMotif (hex-shell mark, machined knob cap),
                       TurtleTimeWidgets (TurtleKnob, PatternCell)
   tests/              TurtleTimeTests.cpp
+plugins/parrot/       pitch / formant voice bender (own processor and editor):
+  Source/             ParrotProcessor (params, MIDI notes, latency), ParrotEditor
+  Source/dsp/         VoiceShifter (pitch marks + TD-PSOLA + formant resampling), ParrotEngine (modes, level match,
+                      drive, mix, pitch trace for the UI)
+  Source/ui/          ParrotTheme (kThemeHue 355), ParrotMotif (macaw head, feather knob pointer, drifting feathers),
+                      ParrotWidgets (ParrotKnob)
+  tests/              ParrotTests.cpp
 templates/plugin/     starter copied by scripts/new_plugin.py (placeholders __NAME__, __NAME_LOWER__, __HUE__, ...)
 .cursor/skills/       the /setup, /vst and /release skills (canonical);  .claude/skills/ holds copies made by scripts/sync_skills.sh
 scripts/              new_plugin.py, install_plugins.py (+ tests/), verify_plugin.sh, release_plugin.sh / release_win_plugin.ps1 (any slug), build_mac_pkg.sh, installers/ (mac + win templates), validate/upload release helpers, format.sh, sync_skills.sh, check_repo.sh (docs/RELEASE.md)
@@ -258,6 +273,38 @@ are original.
 - Palette: graphite with a mint-green accent (`kThemeHue` 147°); amber only for the read head. Product name in
   hosts: "Turtle Time"; VST3 bundle: `TurtleTime.vst3`.
 
+## Parrot specifics
+
+Parrot moves a voice's pitch and formants independently (SHIFT / SNAP / ROBOT) and drives it through the shared
+`dsp::TubeDrive`. It is an original design; the workflow takes cues from voice-bender plugins, nothing else.
+
+- Signal path (`Source/dsp/ParrotEngine.h`): `VoiceShifter` -> level match -> `TubeDrive` -> mix with the dry signal
+  delayed by the full latency, in chunks of 256. `prepare` allocates; `process` does not.
+- Pitch: `dsp::PitchTracker` (YIN, 75-1000 Hz). Pitch marks sit one period apart, aligned to the previous mark by
+  normalised cross-correlation with parabolic interpolation (fractional positions, so rounding never accumulates
+  into a pitch bias).
+- Shifting (`VoiceShifter`): TD-PSOLA. Voiced grains are asymmetric Hann windows reaching to the neighbouring marks,
+  re-spaced at period / alpha (the nearest analysis mark is reused or skipped), gain sqrt(beta / alpha). The formant
+  ratio beta resamples each grain through `dsp::SincReader`. Unvoiced input uses 5 ms grains at their own time (no
+  pitch buzz). At neutral settings the output is the input, delayed, so a 50% mix does not comb. Every grain is
+  launched 1.25 of the longest periods / beta ahead; the latency (~69 ms at any rate) is sized so a grain never
+  reads past the input and its nearest mark is always known (`diagnostics()` counts violations; tests require 0).
+- Level: grains add coherently at some ratios (an octave) and not at others, so a slow (300 ms) power follower
+  matches the shifted signal to the latency-aligned input, within +-4 dB.
+- Modes: SHIFT alpha = 2^(PITCH / 12). SNAP rounds input + PITCH to the semitone (0.6 st hysteresis; GLIDE smooths
+  the correction). ROBOT targets the held MIDI note (else NOTE) + PITCH, GLIDE as portamento. FINE off rounds PITCH
+  and FORMANT to semitones; LINK adds PITCH to FORMANT (`dsp::appliedPitch` / `appliedFormant`, used by engine and
+  UI). The plugin takes MIDI (`NEEDS_MIDI_INPUT TRUE`).
+- Parameters (APVTS, version 1): `pitch`, `formant` (+-12 st), `fine`, `link` (bool), `mode` (Shift/Snap/Robot),
+  `note` (C2..B5, default C3; C4 = MIDI 60), `glide` (0-500 ms), `drive` (0-100%, default 0), `mix` (default 100%).
+- UI (`ParrotEditor`, 940x560): header (macaw mascot, PARROT, tagline, brand badge); PITCH panel (knob, interval
+  name, FINE); display (input note -> output note, formant, 24-semitone pitch roll of input and output, robot target,
+  status line); FORMANT panel (knob, LINK); MODE panel (pills, robot NOTE stepper, GLIDE); DRIVE panel (knob, a
+  12AX7 glowing with `getHeat`); MIX panel (knob, latency). Each control keeps one macaw colour: pitch scarlet
+  (`accent`), formant blue (`detail`), drive gold (`accentAlt`).
+- Limits: the tube model is physically based, not a copy of any commercial saturator. PSOLA is monophonic: chords
+  or doubled voices will warble.
+
 ## Branding
 
 - Company: **Animal Audio** (wordmark "ANIMAL AUDIO" with a paw glyph, `animalaudio::ui::BrandBadge`;
@@ -291,3 +338,5 @@ are original.
   (shared/testing) interns them and keeps a connection open. Test targets compile with `JUCE_USE_XSHM=0` because MIT-SHM
   `X_ShmAttach` fails intermittently under `xvfb-run`.
 - `Button::triggerClick()` is asynchronous; in tests pump the message loop (`JUCE_MODAL_LOOPS_PERMITTED=1` on test targets).
+- Git on macOS matches ignore patterns case-insensitively: a bare `Testing/` (ctest output) also hid `shared/testing/`,
+  so it is anchored as `/Testing/`. If a new file is missing from `git status`, run `git check-ignore -v <file>`.
