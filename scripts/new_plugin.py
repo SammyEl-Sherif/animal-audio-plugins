@@ -6,7 +6,8 @@
 Creates plugins/wobble/ (CMake target `Wobble`, VST3 only): a green scaffold (GainShaperProcessor +
 ShaperEditor + Theme—the curve-shaper stack Duck uses). Replace editor/DSP in /vst when the concept needs
 a different layout; keep Theme, Motif, and BrandBadge. Picks a hue far from other plugins' `kThemeHue`, a
-unique 4-character plugin code, and adds a README table row. Re-run cmake to build.
+unique 4-character plugin code, adds a README table row, and adds the slug to the Release plugin
+workflow dropdown. Re-run cmake to build.
 """
 
 from __future__ import annotations
@@ -19,6 +20,11 @@ from pathlib import Path
 
 README_START = "<!-- PLUGINS:START -->"
 README_END = "<!-- PLUGINS:END -->"
+# Anchor in .github/workflows/release-plugin.yml. The choice values are folder slugs.
+_PLUGIN_SLUG_OPTIONS = re.compile(
+    r"^        options: # plugin-slugs\n(?:          - [a-z0-9]+\n)+",
+    re.MULTILINE,
+)
 
 
 def fail(message: str) -> "None":
@@ -71,6 +77,37 @@ def render(text: str, values: dict[str, str]) -> str:
     for key, value in values.items():
         text = text.replace(key, value)
     return text
+
+
+def plugin_slugs_in_release_workflow(text: str) -> list[str]:
+    """Folder slugs in the Release plugin workflow's plugin dropdown."""
+    match = _PLUGIN_SLUG_OPTIONS.search(text)
+    if not match:
+        raise ValueError("release workflow is missing the plugin-slugs choice list")
+    return re.findall(r"^          - ([a-z0-9]+)$", match.group(0), re.MULTILINE)
+
+
+def add_release_workflow_plugin(workflow: Path, slug: str) -> bool:
+    """Insert slug into the Release plugin dropdown, keeping the list sorted.
+
+    Returns False when the workflow file is absent or the slug is already listed.
+    """
+    if not re.fullmatch(r"[a-z0-9]+", slug):
+        fail(f"plugin slug {slug!r} must be lowercase letters and digits")
+    if not workflow.is_file():
+        return False
+    text = workflow.read_text(encoding="utf-8")
+    slugs = plugin_slugs_in_release_workflow(text)
+    if slug in slugs:
+        return False
+    block = "        options: # plugin-slugs\n" + "".join(
+        f"          - {name}\n" for name in sorted([*slugs, slug])
+    )
+    updated, count = _PLUGIN_SLUG_OPTIONS.subn(block, text, count=1)
+    if count != 1:
+        fail(f"could not update the plugin dropdown in {workflow}")
+    workflow.write_text(updated, encoding="utf-8")
+    return True
 
 
 def add_readme_row(readme: Path, name: str, folder: str, description: str) -> bool:
@@ -144,10 +181,13 @@ def main() -> None:
         target.write_text(render(source.read_text(encoding="utf-8"), values), encoding="utf-8")
 
     readme_updated = False if args.no_readme else add_readme_row(root / "README.md", name, folder, description)
+    workflow_updated = add_release_workflow_plugin(root / ".github" / "workflows" / "release-plugin.yml", folder)
 
     print(f"Created {destination.relative_to(root)} (target {name}, plugin code {code}, theme hue {hue:g})")
     if readme_updated:
         print("Added a row to the README plugin table")
+    if workflow_updated:
+        print("Added the plugin to the Release workflow dropdown")
     print("\nNext steps:")
     print(f"  cmake -S . -B build                  # re-run so the new folder is picked up")
     print(f"  cmake --build build --target {name}_VST3")

@@ -153,7 +153,8 @@ cmake -S . -B build && scripts/verify_plugin.sh Wobble
 
 The script copies `templates/plugin` to `plugins/wobble`, substitutes the placeholders, picks a unique
 4-char plugin code (manufacturer code is always `AnAu`) and a theme hue far from every other plugin's
-`kThemeHue`, and adds a row to the README plugin table. The result is a **green scaffold**: `GainShaperProcessor` + `ShaperEditor` + `Theme` (Duck's curve-shaper stack)
+`kThemeHue`, adds a row to the README plugin table, and adds the slug to the Release plugin
+workflow dropdown. The result is a **green scaffold**: `GainShaperProcessor` + `ShaperEditor` + `Theme` (Duck's curve-shaper stack)
 and the standard shaper test suites. New plugins are not required to keep that layout—swap editor and/or
 processor when the concept needs it; keep Animal Audio branding (`BrandBadge`, palette, Motif).
 

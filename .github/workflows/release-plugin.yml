@@ -5,10 +5,13 @@ on:
   workflow_dispatch:
     inputs:
       plugin:
-        description: Plugin slug (folder under plugins/, e.g. duck)
-        type: string
+        description: Plugin
+        type: choice
         required: true
         default: duck
+        options: # plugin-slugs
+          - duck
+          - turtletime
       platform:
         description: Target OS
         type: choice
