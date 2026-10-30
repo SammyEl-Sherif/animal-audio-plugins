@@ -56,7 +56,7 @@ env:
 jobs:
   release-mac:
     if: inputs.platform == 'mac'
-    runs-on: macos-14
+    runs-on: macos-15
     # Typical run ~10-15 min; notarization can be slow, but a signing hang should not burn 6 h.
     timeout-minutes: 60
     steps:
