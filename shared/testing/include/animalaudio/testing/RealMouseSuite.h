@@ -71,9 +71,13 @@ struct DesktopEditor
         editor->setTopLeftPosition(0, 0);
         window->fitToEditor();
 
+        // macOS only delivers a click to the window that is topmost at that screen point, and a test process
+        // opens behind whatever is on screen (terminal, CI runner dialogs): float above everything.
+        window->setAlwaysOnTop(true);
         window->addToDesktop(0);
         window->setTopLeftPosition(60, 60);
         window->setVisible(true);
+        window->toFront(false);
         pump(50);
         peer = window->getPeer();
         REQUIRE(peer != nullptr);

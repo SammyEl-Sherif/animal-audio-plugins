@@ -14,7 +14,7 @@ are kept for later but not run by CI.
 | animal.audio | `plugin_releases` row per slug + platform (upload updates checksums) |
 
 The next version comes from [conventional commits](https://www.conventionalcommits.org/) since the plugin's last tag
-that touch `plugins/<slug>/`, `shared/`, `cmake/` or the root `CMakeLists.txt`
+that touch `plugins/<slug>/`, `shared/` (except `shared/testing/`), `cmake/` or the root `CMakeLists.txt`
 ([`scripts/plan_release.py`](../scripts/plan_release.py)):
 
 | Commit | Bump |

@@ -8,7 +8,7 @@
 Per plugin, the base version is the higher of plugins/<slug>/VERSION and its latest <slug>-vX.Y.Z tag.
 - No tag yet: release VERSION as is (first release).
 - VERSION above the latest tag: release VERSION as is (a hand-picked version).
-- Otherwise bump from the commits since that tag that touch the plugin, shared/ or cmake/:
+- Otherwise bump from the commits since that tag that touch the plugin, shared/ (not shared/testing) or cmake/:
   `type!:` or `BREAKING CHANGE` -> major, `feat` -> minor, `fix` / `bugfix` / `perf` -> patch. Any other type
   (chore, docs, refactor, test, ci, non-conventional) releases nothing.
 `--bump patch|minor|major` forces that bump; `--bump current` re-releases the base version.
@@ -33,8 +33,8 @@ BUMPS = ("auto", "patch", "minor", "major", "current")
 _LEVEL = {"patch": 1, "minor": 2, "major": 3}
 _CONVENTIONAL = re.compile(r"^(?P<type>[a-zA-Z]+)(?:\([^)]*\))?(?P<breaking>!)?:\s")
 _TYPE_BUMP = {"feat": "minor", "fix": "patch", "bugfix": "patch", "perf": "patch"}
-# Paths (besides plugins/<slug>/) whose changes ship inside every plugin binary.
-SHARED_PATHS = ("shared", "cmake", "CMakeLists.txt")
+# Paths (besides plugins/<slug>/) whose changes ship inside every plugin binary; test helpers do not ship.
+SHARED_PATHS = ("shared", "cmake", "CMakeLists.txt", ":(exclude)shared/testing")
 
 
 @dataclass(frozen=True)

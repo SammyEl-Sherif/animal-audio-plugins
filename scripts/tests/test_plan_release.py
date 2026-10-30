@@ -100,6 +100,13 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(self.plan("duck").version, "1.0.1")
         self.assertEqual(self.plan("owl").version, "1.0.1")
 
+    def test_shared_test_helpers_do_not_count(self) -> None:
+        (self.repo / "shared" / "testing").mkdir()
+        (self.repo / "shared" / "testing" / "t.h").write_text("")
+        git(self.repo, "add", ".")
+        git(self.repo, "commit", "-qm", "fix: test helper")
+        self.assertIsNone(self.plan("duck"))
+
     def test_other_plugin_changes_do_not_count(self) -> None:
         self.change("plugins/owl/CMakeLists.txt", "feat: owl only")
         self.assertIsNone(self.plan("duck"))
